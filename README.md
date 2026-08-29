@@ -57,8 +57,10 @@ see [NOTICE](NOTICE)). All of it is per-node and TP-agnostic:
 | 6 | Optional NVFP4 + fp8 side-layers hybrid (`VLLM_FP8_HYBRID=1`) | +20% decode on one box, same tournament quality |
 
 What this repo adds on top: the 4-node launcher (`launch-qwen38-tp4.sh`), the
-fleet scripts (image/weight fan-out with ID verification, preflight, teardown),
-and the GB10 multi-node operational discipline learned the hard way in
+fleet scripts (image/weight fan-out with ID verification, preflight, teardown,
+per-node hybrid conversion), the gate suite and bench harness (`evals/`), a
+self-healing watchdog (`fleet_watchdog.sh`), and the GB10 multi-node
+operational discipline learned the hard way in
 [tonyd2wild/GLM-5.3-Flash-NVFP4-1M-KV-4x-DGX-Spark](https://github.com/tonyd2wild/GLM-5.3-Flash-NVFP4-1M-KV-4x-DGX-Spark):
 unconditional page-cache flusher during boot, worker-first launch, tear down all
 ranks before relaunching any, capture logs before `docker rm -f`.
@@ -130,9 +132,11 @@ In order; nothing skips ahead of the gates.
 
 1. **bf16-KV lane through the gate suite** — the boot ladder above, on stock
    NVFP4 weights. This is the config the repo ships as default once it passes.
-2. **Hybrid weights lane** — vendor blazux's `fp8_convert.py` + a
-   `prepare-hybrid.sh` that converts once on the head and fans the snapshot out
-   (+20% decode on one box; measure whether it holds at TP4).
+2. **Hybrid weights lane** — tooling shipped
+   ([`scripts/prepare-hybrid.sh`](scripts/prepare-hybrid.sh): each node
+   converts its local copy, deterministic, verified to match across the
+   fleet; serve with `HYBRID=1`). Still to do: measure whether the +20%
+   decode from one box holds at TP4.
 3. **KV-dtype port for the QSA path (stretch goal)** — vLLM's QSA layers
    currently refuse anything but bf16 KV. SGLang proved fp8 and even NVFP4 KV
    work for this model (MiaAI-Lab: 0.93M → 1.75M → 2.85M token pools at the

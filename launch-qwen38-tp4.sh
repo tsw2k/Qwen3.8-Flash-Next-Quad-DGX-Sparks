@@ -27,6 +27,12 @@ case "$NODE_RANK" in
   *) echo "rank must be 0-3" >&2; exit 2 ;;
 esac
 
+# HYBRID=1 serves the fp8-side-layers copy prepared by scripts/prepare-hybrid.sh.
+if [ "${HYBRID:-0}" = 1 ]; then
+  MODEL_HOST_PATH="${MODEL_HOST_PATH%/}-fp8hybrid"
+  test -f "$MODEL_HOST_PATH/.prepared" || { echo "MISSING: $MODEL_HOST_PATH/.prepared — run scripts/prepare-hybrid.sh" >&2; exit 3; }
+fi
+
 # Fail loudly on missing prereqs rather than letting Docker create empty dirs over them.
 test -f "$MODEL_HOST_PATH/config.json" || { echo "MISSING: $MODEL_HOST_PATH/config.json — run scripts/sync-weights.sh" >&2; exit 3; }
 docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "MISSING: image $IMAGE — run scripts/sync-image.sh" >&2; exit 3; }
