@@ -61,7 +61,7 @@ start_flusher() {
   run_on "$1" "pkill -f '[f]lusher-unconditional.sh' 2>/dev/null; cd '$REPO_DIR' && setsid nohup ./flusher-unconditional.sh >/tmp/flusher-unconditional.log 2>&1 < /dev/null & sleep 1; pgrep -f '[f]lusher-unconditional.sh' >/dev/null && echo flusher:RUNNING || echo flusher:FAILED"
 }
 
-stop_flusher() { run_on "$1" "pkill -f flusher-unconditional.sh 2>/dev/null || true"; }
+stop_flusher() { run_on "$1" "pkill -f '[f]lusher-unconditional.sh' 2>/dev/null || true"; }
 
 mem_ritual() {
   run_on "$1" 'sync; echo 3 | sudo -n tee /proc/sys/vm/drop_caches >/dev/null || echo "WARN: drop_caches failed (sudo -n?)"; echo 1 | sudo -n tee /proc/sys/vm/compact_memory >/dev/null || echo "WARN: compact_memory failed"'
