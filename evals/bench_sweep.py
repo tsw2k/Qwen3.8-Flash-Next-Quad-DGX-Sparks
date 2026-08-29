@@ -40,6 +40,7 @@ PROMPTS = [
 def stream_one(base, model, prompt, max_tokens):
     body = json.dumps({
         "model": model, "temperature": 0.7, "max_tokens": max_tokens,
+        "chat_template_kwargs": {"enable_thinking": False},
         "stream": True, "stream_options": {"include_usage": True},
         "messages": [{"role": "user", "content": prompt}],
     }).encode()

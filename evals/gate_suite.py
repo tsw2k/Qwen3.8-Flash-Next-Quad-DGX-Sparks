@@ -36,6 +36,9 @@ def chat(base, model, messages, max_tokens, temperature=0.0, timeout=1800):
     body = json.dumps({
         "model": model, "messages": messages,
         "max_tokens": max_tokens, "temperature": temperature,
+        # thinking off: gates measure the deterministic no-reasoning path,
+        # and with thinking on the content field can be None entirely
+        "chat_template_kwargs": {"enable_thinking": False},
     }).encode()
     req = urllib.request.Request(
         base + "/v1/chat/completions", body, {"Content-Type": "application/json"})
@@ -43,7 +46,7 @@ def chat(base, model, messages, max_tokens, temperature=0.0, timeout=1800):
     with urllib.request.urlopen(req, timeout=timeout) as r:
         out = json.load(r)
     dt = time.time() - t0
-    msg = out["choices"][0]["message"]["content"]
+    msg = out["choices"][0]["message"]["content"] or ""
     usage = out.get("usage", {})
     return msg, usage, dt
 
