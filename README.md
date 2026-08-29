@@ -104,10 +104,13 @@ Any relaunch, including after a failed boot: `scripts/teardown.sh` first, always
 
 ## The boot ladder (plan)
 
-Nothing gets promoted to a default here without passing a gate: long prompt AND
-long forced answer (>=100 completion tokens, varied per run so the prefix cache
-can't fake it), concurrent prefills, `/health` 200 throughout. A config that
-boots and answers a short prompt is not a config that works.
+Nothing gets promoted to a default here without passing
+[`evals/gate_suite.py`](evals/gate_suite.py): long prompt AND long forced
+answer (varied per run so the prefix cache can't fake it), concurrent
+prefills, determinism, NIAH passkey retrieval, `/health` 200 throughout.
+A config that boots and answers a short prompt is not a config that works.
+Throughput numbers come from [`evals/bench_sweep.py`](evals/bench_sweep.py)
+(concurrency sweep with TTFT, real prompts, no `ignore_eos`).
 
 1. **Rung 0 — rendezvous:** TP4, native 262k, `GPU_MEM=0.75`, MTP=2. First
    verification of vLLM multi-node (`--nnodes 4`, mp backend) for this
@@ -149,8 +152,10 @@ count.
 - Does vLLM's `--nnodes 4` / mp-backend path work for `qwen4exp` on GB10 at all?
   (Validated upstream on GB300 trays; never published on Sparks.)
 - Does MTP load and win at TP4? At what acceptance on real traffic?
-- How is the PLE table handled at TP4 — replicated per rank (each node mmaps its
-  local NVMe copy; expected) or sharded? Does the gather stay off the hot path?
+- Which PLE lane wins at TP4 — mmap from local NVMe, or the stock
+  vocab-sharded resident table (~11–13 GiB/rank), which no single box can
+  afford but TP4 can? Source analysis in
+  [docs/TP4-DESIGN-NOTES.md](docs/TP4-DESIGN-NOTES.md).
 - What does the per-layer all-reduce cost on a switched 2x100G dual-rail fabric
   vs the direct-cabled 200G the TP2 recipes use?
 - Where is the KV ceiling per rank with bf16 KV + the flusher discipline, and
