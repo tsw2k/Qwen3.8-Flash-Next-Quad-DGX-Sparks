@@ -23,9 +23,17 @@ test -f "$MODEL_HOST_PATH/config.json" || { echo "download incomplete: no config
 
 for host in $SSH_HOSTS; do
   case "$host" in "$SELF") continue ;; esac
-  echo ">> rsync -> $host:$MODEL_HOST_PATH"
   ssh "$host" "mkdir -p '$MODEL_HOST_PATH'"
-  rsync -a --info=progress2 --partial "$MODEL_HOST_PATH/" "$host:$MODEL_HOST_PATH/"
+  if [ -n "${WEIGHTS_RSYNC_URL:-}" ]; then
+    # Daemon pull over the compute rails (~16 Gbps) — see .env.example for why.
+    echo ">> $host: pulling from $WEIGHTS_RSYNC_URL"
+    ssh "$host" "rsync -a --partial '$WEIGHTS_RSYNC_URL/' '$MODEL_HOST_PATH/'"
+  else
+    # Fallback: rsync over ssh. On GB10 this is AES-capped at ~1 Gbps — hours
+    # for a checkpoint this size. Set WEIGHTS_RSYNC_URL if you can.
+    echo ">> rsync (ssh) -> $host:$MODEL_HOST_PATH"
+    rsync -a --info=progress2 --partial "$MODEL_HOST_PATH/" "$host:$MODEL_HOST_PATH/"
+  fi
 done
 
 echo ">> verifying config.json on every node:"

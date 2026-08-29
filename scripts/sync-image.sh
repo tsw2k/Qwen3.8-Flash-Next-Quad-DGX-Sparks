@@ -26,8 +26,20 @@ for host in $SSH_HOSTS; do
     echo ">> $host: already has $LOCAL_ID, skipping"
     continue
   fi
-  echo ">> $host: shipping image (docker save | zstd | ssh | docker load)"
-  docker save "$IMAGE" | zstd -3 -T0 | ssh "$host" "zstd -d | docker load"
+  if [ -n "${IMAGE_RSYNC_URL:-}" ]; then
+    # Daemon pull over the compute rails — ssh streams are AES-capped ~1 Gbps on GB10.
+    # Tar is named by image ID, so a stale tar from a previous build can never ship.
+    TAR="${IMAGE_TAR_DIR:-/var/tmp}/qwen38-image-${LOCAL_ID#sha256:}.tar.zst"
+    if [ ! -f "$TAR" ]; then
+      echo ">> writing $TAR once for daemon pulls"
+      docker save "$IMAGE" | zstd -3 -T0 > "$TAR.tmp" && mv "$TAR.tmp" "$TAR"
+    fi
+    echo ">> $host: pulling image tar via $IMAGE_RSYNC_URL"
+    ssh "$host" "rsync -a --partial '$IMAGE_RSYNC_URL/$(basename "$TAR")' /var/tmp/ && zstd -d < /var/tmp/$(basename "$TAR") | docker load"
+  else
+    echo ">> $host: shipping image (docker save | zstd | ssh | docker load)"
+    docker save "$IMAGE" | zstd -3 -T0 | ssh "$host" "zstd -d | docker load"
+  fi
 done
 
 echo ">> verifying image IDs across the fleet:"
