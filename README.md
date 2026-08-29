@@ -5,11 +5,29 @@ Serving **[RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qw
 **four NVIDIA DGX Spark (GB10 / SM121) class nodes** at tensor-parallel 4, with
 **vLLM**, over a switched dual-rail RoCEv2 fabric.
 
-> ⚠️ **Status: pre-boot skeleton.** This recipe has NOT been booted on the target
-> cluster yet — the hardware is currently busy with another deployment. Every
-> per-node piece is proven (see Credits); the TP4-across-four-Sparks part is the
-> work this repo exists to do, and this README will carry measured numbers, not
-> projections, once it does. Until then treat everything below as a plan.
+> ⚠️ **Status: single-node baseline validated; TP4 pending.** The full patched
+> stack has booted and passed the gate suite at TP1 on one node of the target
+> cluster (see *Measured so far*). The TP4-across-four-Sparks part — the work
+> this repo exists to do — is waiting on a hardware window (transceiver
+> thermals on the fabric). Numbers below marked TP1 are measured; everything
+> about TP4 is still a plan.
+
+## Measured so far (TP1 baseline, 2026-08-30)
+
+One node, this repo's image (`GPU_MEM=0.80`, native 262k, MTP=2, mmap PLE,
+`EXACT_TOPK=1`, thinking off):
+
+| | |
+|---|---|
+| Boot to `Application startup complete` | ~14.5 min |
+| PLE mmap | 47.7 GiB table served from NVMe, decode-sized gather ~12 ms |
+| KV pool (bf16) | **453,320 tokens** — 1.73x a full 262k request |
+| Single-stream decode | **30.8 tok/s** ("write a function then explain it", temp 0) |
+| Gate suite | **all PASS** — deep-decode, 3x ~30k concurrent prefills (44–58 s), determinism (byte-identical), NIAH 4k/32k at 0/50/100% depth |
+
+This matches the upper end of the published single-Spark vLLM numbers
+(26–31 tok/s) and validates every per-node piece — image, patches, PLE lane A,
+MTP on this architecture — before any fabric involvement.
 
 ## Why four Sparks, and why vLLM
 
