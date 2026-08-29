@@ -36,7 +36,7 @@ fi
 # Fail loudly on missing prereqs rather than letting Docker create empty dirs over them.
 test -f "$MODEL_HOST_PATH/config.json" || { echo "MISSING: $MODEL_HOST_PATH/config.json — run scripts/sync-weights.sh" >&2; exit 3; }
 docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "MISSING: image $IMAGE — run scripts/sync-image.sh" >&2; exit 3; }
-pgrep -f flusher-unconditional.sh >/dev/null || echo "WARNING: flusher-unconditional.sh is not running — on GB10 the boot can OOM without it" >&2
+pgrep -f '[f]lusher-unconditional.sh' >/dev/null || echo "WARNING: flusher-unconditional.sh is not running — on GB10 the boot can OOM without it" >&2
 
 # The PLE gather is a CPU op + a host->device copy: it MUST run outside CUDA graphs.
 # Declared as a splitting op with PIECEWISE capture (never FULL*). List from blazux.

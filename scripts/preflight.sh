@@ -44,7 +44,8 @@ for host in $SSH_HOSTS; do
   if [ -n "$LEFT" ]; then say container "leftover '$NAME' — scripts/teardown.sh first"; FAIL=1
   else say container clean; fi
 
-  if run "$host" "pgrep -f flusher-unconditional.sh >/dev/null" 2>/dev/null; then say flusher running
+  # bracket trick: the pattern must not match the ssh/bash wrapper carrying it
+  if run "$host" "pgrep -f '[f]lusher-unconditional.sh' >/dev/null" 2>/dev/null; then say flusher running
   else say flusher "not running (start it on every node before launching)"; fi
 done
 

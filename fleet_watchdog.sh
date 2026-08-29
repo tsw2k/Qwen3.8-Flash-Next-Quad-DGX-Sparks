@@ -58,7 +58,7 @@ run_on() {  # run_on <rank> <command string>
 healthy() { curl -sf -m "$CURL_TIMEOUT" -o /dev/null "$HEALTH_URL"; }
 
 start_flusher() {
-  run_on "$1" "pkill -f flusher-unconditional.sh 2>/dev/null; cd '$REPO_DIR' && setsid nohup ./flusher-unconditional.sh >/tmp/flusher-unconditional.log 2>&1 < /dev/null & sleep 1; pgrep -f flusher-unconditional.sh >/dev/null && echo flusher:RUNNING || echo flusher:FAILED"
+  run_on "$1" "pkill -f '[f]lusher-unconditional.sh' 2>/dev/null; cd '$REPO_DIR' && setsid nohup ./flusher-unconditional.sh >/tmp/flusher-unconditional.log 2>&1 < /dev/null & sleep 1; pgrep -f '[f]lusher-unconditional.sh' >/dev/null && echo flusher:RUNNING || echo flusher:FAILED"
 }
 
 stop_flusher() { run_on "$1" "pkill -f flusher-unconditional.sh 2>/dev/null || true"; }
