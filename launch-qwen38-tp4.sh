@@ -38,6 +38,12 @@ test -f "$MODEL_HOST_PATH/config.json" || { echo "MISSING: $MODEL_HOST_PATH/conf
 docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "MISSING: image $IMAGE — run scripts/sync-image.sh" >&2; exit 3; }
 pgrep -f '[f]lusher-unconditional.sh' >/dev/null || echo "WARNING: flusher-unconditional.sh is not running — on GB10 the boot can OOM without it" >&2
 
+# --enable-expert-parallel is REQUIRED at TP4 with this checkpoint: plain TP shards
+# the MoE intermediate 640 -> 160/rank, which the NVFP4 FLASHINFER_CUTLASS kernels
+# cannot pad (NotImplementedError at load). EP keeps experts whole, 128/rank.
+# --ulimit nofile=1M: the PLE table is 128 memmapped shards; together with 4-node
+# NCCL/EP sockets that blows through Docker's default fd limit (Errno 24 at load).
+
 # The PLE gather is a CPU op + a host->device copy: it MUST run outside CUDA graphs.
 # Declared as a splitting op with PIECEWISE capture (never FULL*). List from blazux.
 SPLIT='["vllm::unified_attention_with_output","vllm::unified_mla_attention_with_output","vllm::mamba_mixer2","vllm::mamba_mixer","vllm::short_conv","vllm::qwen3_8_flash_next_ple_short_conv","vllm::qwen3_8_flash_next_qsa_with_output","vllm::linear_attention","vllm::qwen_gdn_attention_core","vllm::qwen_gdn_attention_core_fused_norm_packed","vllm::sparse_attn_indexer","vllm::ple_mmap_lookup"]'
@@ -78,6 +84,7 @@ docker run --gpus all -d \
   --name "$NAME" --restart no \
   --network host --ipc host --shm-size 32g --memory 112g --memory-swap 112g \
   --ulimit memlock=-1:-1 --cap-add IPC_LOCK \
+  --ulimit nofile=1048576:1048576 \
   --device /dev/infiniband:/dev/infiniband \
   -v "$MODEL_HOST_PATH:$MODEL_PATH:ro" \
   -e VLLM_HOST_IP="$HOST_IP" \
@@ -103,6 +110,7 @@ docker run --gpus all -d \
     --host 0.0.0.0 --port "$PORT" \
     --load-format safetensors \
     --tensor-parallel-size 4 \
+    --enable-expert-parallel \
     --max-model-len "$CTX" --max-num-seqs "$SEQS" \
     --gpu-memory-utilization "$GPU_MEM" "${KV_ARGS[@]}" \
     $PC_ARG --enable-chunked-prefill --max-num-batched-tokens 8192 \
