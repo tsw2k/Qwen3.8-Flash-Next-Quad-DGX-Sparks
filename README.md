@@ -8,9 +8,8 @@ Serving **[RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qw
 > ⚠️ **Status: single-node baseline validated; TP4 pending.** The full patched
 > stack has booted and passed the gate suite at TP1 on one node of the target
 > cluster (see *Measured so far*). The TP4-across-four-Sparks part — the work
-> this repo exists to do — is waiting on a hardware window (transceiver
-> thermals on the fabric). Numbers below marked TP1 are measured; everything
-> about TP4 is still a plan.
+> this repo exists to do — is waiting on a hardware window. Numbers below
+> marked TP1 are measured; everything about TP4 is still a plan.
 
 ## Measured so far (TP1 baseline, 2026-08-30)
 
