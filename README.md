@@ -85,7 +85,8 @@ ranks before relaunching any, capture logs before `docker rm -f`.
 ## Quickstart (4 nodes)
 
 Prereqs: 4x GB10 nodes (128 GB each), Docker + NVIDIA runtime, passwordless ssh
-between them, a RoCEv2 fabric (switched or direct), ~130 GB free NVMe per node.
+between them, a switched RoCEv2 fabric (a GB10 has two QSFP ports, so four
+nodes cannot be direct-cabled — TP4 needs a switch), ~130 GB free NVMe per node.
 
 ```bash
 git clone https://github.com/tsw2k/Qwen3.8-Flash-Next-Quad-DGX-Sparks.git
