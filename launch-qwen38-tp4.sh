@@ -114,7 +114,7 @@ docker run --gpus all -d \
     --enable-expert-parallel \
     --max-model-len "$CTX" --max-num-seqs "$SEQS" \
     --gpu-memory-utilization "$GPU_MEM" "${KV_ARGS[@]}" \
-    $PC_ARG --enable-chunked-prefill --max-num-batched-tokens 8192 \
+    $PC_ARG --enable-chunked-prefill --max-num-batched-tokens "${MNBT:-8192}" \
     -cc.cudagraph_mode=PIECEWISE -cc.splitting_ops="$SPLIT" \
     --no-enable-flashinfer-autotune \
     --kv-cache-dtype auto \
