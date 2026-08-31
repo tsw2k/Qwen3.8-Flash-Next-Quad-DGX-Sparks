@@ -35,7 +35,7 @@ block = (
     f"{indent}# + weight_scale — exactly what the FP8 method expects. Accept them\n"
     f"{indent}# so VLLM_PLE_CPU_OFFLOAD works with this checkpoint (@jschmied's fix).\n"
     f"{indent}if quant_config is not None and quant_config.__class__.__name__ in (\n"
-    f"{indent}        'ModelOptFp4Config', 'ModelOptFp8Config'):\n"
+    f"{indent}        'ModelOptNvFp4Config', 'ModelOptFp4Config', 'ModelOptFp8Config'):\n"
     f"{indent}    return {method_cls}()\n"
 )
 src = src[: m.end()] + block + src[m.end():]
