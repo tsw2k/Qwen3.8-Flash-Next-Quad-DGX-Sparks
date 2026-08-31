@@ -5,6 +5,8 @@ Serving **[RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qw
 **four NVIDIA DGX Spark (GB10 / SM121) class nodes** at tensor-parallel 4, with
 **vLLM**, over a switched dual-rail RoCEv2 fabric.
 
+> 💬 Discussion: [NVIDIA developer forums thread](https://forums.developer.nvidia.com/t/qwen3-8-flash-next-nvfp4-on-4x-dgx-spark-vllm-tp4-serving-4-7m-token-kv-pool-and-the-three-fixes-you-will-need/381897)
+
 > ✅ **Status: TP4 serving and gated at native 262k** — the shipped default
 > lane (see *Measured*). The **1M YaRN lane boots** (4,996k-token KV pool,
 > 4.78x a full 1M request, NIAH-128k passes at all depths) but is
