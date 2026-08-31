@@ -61,8 +61,10 @@ def health(base):
 
 def haystack(rng, n_tokens, passkey, depth):
     """Synthetic filler with a passkey sentence planted at `depth` (0..1).
-    Filler is ~1 token/word; sizes are approximate, which is fine for a gate."""
-    words = [rng.choice(WORDS) for _ in range(n_tokens)]
+    The filler measures ~1.05 tokens/word on the qwen tokenizer; divide so a
+    requested size lands slightly UNDER it (a 250k-word prompt once came out
+    262,145 tokens — one over the model limit — and 400'd the whole rung)."""
+    words = [rng.choice(WORDS) for _ in range(int(n_tokens / 1.06))]
     sentence = f" The secret passkey is {passkey}. Remember it. "
     pos = min(len(words) - 1, int(len(words) * depth))
     words.insert(pos, sentence)
