@@ -7,23 +7,25 @@ with vLLM, over a switched dual-rail RoCEv2 fabric.
 
 > 💬 Discussion: [NVIDIA developer forums thread](https://forums.developer.nvidia.com/t/qwen3-8-flash-next-nvfp4-on-4x-dgx-spark-vllm-tp4-serving-4-7m-token-kv-pool-and-the-three-fixes-you-will-need/381897)
 
-> ✅ Status: TP4 serving and gated at native 262k, which is the shipped default
-> lane (see *Measured*). The 1M YaRN lane boots (4,996k-token KV pool, 4.78x a
-> full 1M request, NIAH-128k passes at all depths) but stays experimental:
-> repeated prefills deeper than ~100k tokens can still wedge the engine. The
-> isolation matrix and the captured stack are in
-> [docs/OPEN-PROBLEMS.md](docs/OPEN-PROBLEMS.md). Next: close that, then the
-> KV ladder and the hybrid weights lane.
+> ✅ Status: TP4 serving and gated at native 262k with `GPU_MEM=0.80`, which
+> is the shipped default (see *Measured*). Known limit: prompts past a wall at
+> roughly 76.8k tokens can wedge the engine within a few requests. We
+> binary-searched the wall and filed it upstream as
+> [vllm#54629](https://github.com/vllm-project/vllm/issues/54629); prompts up
+> to ~73k have been stable in every test. The 1M YaRN lane boots with a 4.27x
+> pool but is unusable for deep prompts until that closes. Run
+> `fleet_watchdog.sh` on any serving deployment. Details in
+> [docs/OPEN-PROBLEMS.md](docs/OPEN-PROBLEMS.md).
 
 ## Measured: TP4, four nodes (2026-08-31)
 
-This repo's image and launcher as shipped (`GPU_MEM=0.75`, native 262k, MTP=2,
+This repo's image and launcher as shipped (`GPU_MEM=0.80`, native 262k, MTP=2,
 EP, mmap PLE, `EXACT_TOPK=1`, thinking off, dual-rail switched RoCEv2):
 
 | | |
 |---|---|
 | Boot to `Application startup complete` | ~8 min (sharded weight load; TP1 takes 14.5) |
-| KV pool (bf16) | 4,696,556 tokens, 17.92x a full 262k request |
+| KV pool (bf16) | 5,211,726 tokens, 19.88x a full 262k request (4,696,556 at the earlier `GPU_MEM=0.75`; 0.85 overcommits the head node and is documented as fatal) |
 | Single-stream decode | 31.0 tok/s ("write a function then explain it", temp 0). The TP1 baseline on the same image is 30.8, so the fabric costs nothing here |
 | Aggregate decode | 46.0 (x2) · 53.3 (x4) · 97.0 (x8) · 157.0 tok/s (x16), per-stream 12.3 at x16 |
 | TTFT | 0.24 s (x1) to 1.25 s (x16), max_tokens=300, mixed structured/prose/agentic prompts |
@@ -196,11 +198,15 @@ In order, and nothing skips ahead of the gates.
    with the renamed `qwen4_exp` layout are coming. Re-path the patch stack
    (the guarded build steps will flag what upstream absorbed) and retest the
    wedge on a post-merge build.
-3. The hybrid weights lane. Tooling is shipped
-   ([`scripts/prepare-hybrid.sh`](scripts/prepare-hybrid.sh): each node
-   converts its local copy, the conversion is deterministic, and the results
-   are verified to match across the fleet; serve with `HYBRID=1`). Left to
-   measure: whether the +20% decode from one box holds at TP4.
+3. The hybrid weights lane: measured, and not worth it at TP4. Two findings.
+   First, shared experts cannot be converted at all (their 640-wide
+   projections shard to 160 per rank and blockwise fp8 needs multiples of
+   128), so the conversion covers GDN and QSA projections only. Second, with
+   that subset the result is 29.5 tok/s against 31.0 stock: the single-box
+   +20% came from reading whole dense layers per token, and a TP4 rank
+   already reads a quarter of them. Tooling stays in the repo
+   ([`scripts/prepare-hybrid.sh`](scripts/prepare-hybrid.sh), `HYBRID=1`)
+   for anyone who wants to reproduce the measurement.
 4. A KV-dtype port for the QSA path (stretch goal). vLLM's QSA layers
    currently refuse anything but bf16 KV. SGLang proved fp8 and even NVFP4 KV
    work for this model (MiaAI-Lab measured 0.93M / 1.75M / 2.85M token pools
