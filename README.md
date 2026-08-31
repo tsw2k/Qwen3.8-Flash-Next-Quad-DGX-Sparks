@@ -5,10 +5,13 @@ Serving **[RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qw
 **four NVIDIA DGX Spark (GB10 / SM121) class nodes** at tensor-parallel 4, with
 **vLLM**, over a switched dual-rail RoCEv2 fabric.
 
-> ✅ **Status: TP4 serving and gated.** All four nodes, tensor-parallel 4 with
-> expert parallelism, native 262k context — booted, gate suite passed, benched
-> (see *Measured*). Next rungs: 1M YaRN, the KV ladder, the hybrid weights
-> lane.
+> ✅ **Status: TP4 serving and gated at native 262k** — the shipped default
+> lane (see *Measured*). The **1M YaRN lane boots** (4,996k-token KV pool,
+> 4.78x a full 1M request, NIAH-128k passes at all depths) but is
+> **experimental**: repeated >100k-token prefills can still wedge the engine —
+> the isolation matrix and captured stack are in
+> [docs/OPEN-PROBLEMS.md](docs/OPEN-PROBLEMS.md). Next rungs: close that,
+> then the KV ladder and the hybrid weights lane.
 
 ## Measured — TP4, four nodes (2026-08-31)
 
