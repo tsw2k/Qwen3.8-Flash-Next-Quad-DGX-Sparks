@@ -2,6 +2,10 @@
 # From https://github.com/Saren-Arterius/qwen3.8-Flash-DGX-AutoRound (tools/fp8_convert.py, Apache-2.0),
 # by @Saren-Arterius. Included verbatim (minus this header) so scripts/prepare-hybrid.sh is self-contained.
 # Regex TARGETS matches the RadixArk NVFP4 checkpoint tensor names as well (same HF layout).
+# qwen38-quad change: shared_expert projections are EXCLUDED. Their 640-wide dim
+# shards to 160 per rank at TP4, and blockwise fp8 needs multiples of 128
+# ("output_partition_size = 160 is not divisible by block_n = 128" at load).
+# GDN and QSA projections stay 128-divisible after the TP4 split and remain in.
 """Convert dense bf16 side-layers of the Intel Flash-Next checkpoint to
 blockwise FP8-e4m3 (DeepSeek format: fp8 `weight` + fp32 `weight_scale_inv`,
 block 128x128). In-place: affected shards are rewritten, originals -> .bf16.bak.
@@ -25,7 +29,6 @@ TARGETS = re.compile(
     r"model\.language_model\.layers\.\d+\.("
     r"linear_attn\.(in_proj_qkv|in_proj_z|out_proj)"
     r"|self_attn\.(q_proj|k_proj|v_proj|o_proj)"
-    r"|mlp\.shared_expert\.(gate_proj|up_proj|down_proj)"
     r")\.weight$"
 )
 
