@@ -5,28 +5,53 @@ Serving **[RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qw
 **four NVIDIA DGX Spark (GB10 / SM121) class nodes** at tensor-parallel 4, with
 **vLLM**, over a switched dual-rail RoCEv2 fabric.
 
-> ⚠️ **Status: single-node baseline validated; TP4 pending.** The full patched
-> stack has booted and passed the gate suite at TP1 on one node of the target
-> cluster (see *Measured so far*). The TP4-across-four-Sparks part — the work
-> this repo exists to do — is waiting on a hardware window. Numbers below
-> marked TP1 are measured; everything about TP4 is still a plan.
+> ✅ **Status: TP4 serving and gated.** All four nodes, tensor-parallel 4 with
+> expert parallelism, native 262k context — booted, gate suite passed, benched
+> (see *Measured*). Next rungs: 1M YaRN, the KV ladder, the hybrid weights
+> lane.
 
-## Measured so far (TP1 baseline, 2026-08-30)
+## Measured — TP4, four nodes (2026-08-31)
 
-One node, this repo's image (`GPU_MEM=0.80`, native 262k, MTP=2, mmap PLE,
-`EXACT_TOPK=1`, thinking off):
+This repo's image and launcher as shipped (`GPU_MEM=0.75`, native 262k, MTP=2,
+EP, mmap PLE, `EXACT_TOPK=1`, thinking off, dual-rail switched RoCEv2):
 
 | | |
 |---|---|
-| Boot to `Application startup complete` | ~14.5 min |
-| PLE mmap | 47.7 GiB table served from NVMe, decode-sized gather ~12 ms |
-| KV pool (bf16) | **453,320 tokens** — 1.73x a full 262k request |
-| Single-stream decode | **30.8 tok/s** ("write a function then explain it", temp 0) |
-| Gate suite | **all PASS** — deep-decode, 3x ~30k concurrent prefills (44–58 s), determinism (byte-identical), NIAH 4k/32k at 0/50/100% depth |
+| Boot to `Application startup complete` | **~8 min** (sharded weight load beats TP1's 14.5) |
+| KV pool (bf16) | **4,696,556 tokens** — **17.92x** a full 262k request |
+| Single-stream decode | **31.0 tok/s** ("write a function then explain it", temp 0) — the fabric costs nothing vs the 30.8 TP1 baseline |
+| Aggregate decode | 46.0 (x2) · 53.3 (x4) · 97.0 (x8) · **157.0 tok/s (x16)**, per-stream 12.3 at x16 |
+| TTFT | 0.24 s (x1) → 1.25 s (x16), max_tokens=300, mixed structured/prose/agentic prompts |
+| Gate suite | **all PASS** — deep-decode, 3x ~30k concurrent prefills (32–44 s), byte-identical greedy decode, NIAH 4k/32k at 0/50/100% depth |
 
-This matches the upper end of the published single-Spark vLLM numbers
-(26–31 tok/s) and validates every per-node piece — image, patches, PLE lane A,
-MTP on this architecture — before any fabric involvement.
+The memory story this repo was built on, in one line: **TP1 fits 1.73 full
+contexts of KV; TP4 fits 17.92.**
+
+### TP1 baseline (same image, one node, 2026-08-30)
+
+`GPU_MEM=0.80`: boot ~14.5 min · KV pool 453,320 tokens (1.73x) · 30.8 tok/s
+single-stream · PLE mmap 47.7 GiB from NVMe, ~12 ms decode gather · same gate
+suite all PASS. Matches the upper end of the published single-Spark vLLM
+numbers (26–31 tok/s), so the patch stack costs nothing on the way through —
+every per-node piece was validated before the fabric was involved.
+
+## The three TP4 fixes you will need (each cost us a boot)
+
+None of these appear in any single- or dual-node recipe; all are defaults here.
+
+1. **Plain TP4 cannot load this checkpoint.** TP sharding slices the MoE
+   intermediate 640 → 160 per rank and the NVFP4 FLASHINFER_CUTLASS backend
+   dies with `NotImplementedError: Intermediate size padding for w1 and w3`.
+   `--enable-expert-parallel` deals the 512 experts out whole (128/rank).
+2. **Raise the fd limit.** The PLE table is 128 memmapped shards; with 4-node
+   NCCL/EP sockets on top, Docker's default `nofile` overflows and the boot
+   dies with `OSError: [Errno 24] Too many open files` deep in PLE setup.
+   `--ulimit nofile=1048576`.
+3. **Do not hardcode `NCCL_IB_GID_INDEX`.** After a link bounce the RoCE v2
+   GID can land on a different index on one node (we caught 4 vs 3
+   fleet-wide); a pinned index then reads a zero GID and NCCL dies at init
+   with `unhandled system error`. With `NCCL_IB_ROCE_VERSION_NUM=2` and
+   `NCCL_IB_ADDR_RANGE` set, NCCL picks the right GID per device on its own.
 
 ## Why four Sparks, and why vLLM
 
