@@ -66,6 +66,13 @@ RUN python3 /tmp/patch_qsa_exact_topk.py ${SP}/vllm/models/qwen3_8_flash_next/nv
 COPY src/patch_ple_offload_modelopt.py /tmp/patch_ple_offload_modelopt.py
 RUN python3 /tmp/patch_ple_offload_modelopt.py ${PLE} && rm /tmp/patch_ple_offload_modelopt.py
 
+# --- 8. PLE lane C, part 2: allow multi-node offload ------------------------------
+# The nnodes!=1 rejection is conservatism: the offload process is spawned per
+# WorkerProc and is node-local, so TP4 across nodes is architecturally fine.
+COPY src/patch_ple_offload_multinode.py /tmp/patch_ple_offload_multinode.py
+RUN python3 /tmp/patch_ple_offload_multinode.py ${SP}/vllm/v1/worker/gpu_worker.py \
+ && rm /tmp/patch_ple_offload_multinode.py
+
 # --- 6. Hybrid mode: NVFP4 experts + blockwise-fp8 side layers (VLLM_FP8_HYBRID=1) --
 ARG MO=${SP}/vllm/model_executor/layers/quantization/modelopt.py
 ARG QSA=${SP}/vllm/models/qwen3_8_flash_next/nvidia/qsa.py
