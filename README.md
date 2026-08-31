@@ -30,6 +30,13 @@ EP, mmap PLE, `EXACT_TOPK=1`, thinking off, dual-rail switched RoCEv2):
 The memory story this repo was built on, in one line: **TP1 fits 1.73 full
 contexts of KV; TP4 fits 17.92.**
 
+Also verified on this lane: vision (image input), tool calling (clean
+`message.tool_calls`, `qwen3_coder` parser), prefix caching (0.7 s TTFT on a
+cached 20k prefix), thinking, and **MTP acceptance 0.856** on mixed traffic.
+**Client note:** this vLLM build returns the chain-of-thought in
+`message.reasoning`, not `message.reasoning_content` — point your agent
+client at the right field or thinking looks silently absent.
+
 ### TP1 baseline (same image, one node, 2026-08-30)
 
 `GPU_MEM=0.80`: boot ~14.5 min · KV pool 453,320 tokens (1.73x) · 30.8 tok/s

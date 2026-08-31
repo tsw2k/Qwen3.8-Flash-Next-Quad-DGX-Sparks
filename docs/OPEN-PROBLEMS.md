@@ -46,8 +46,15 @@ EP all-to-all are the candidates), spinning and cascading to all ranks
 through the collectives. The PLE mmap gather is where the stack points, not
 where the bug lives.
 
-**In flight:** an `--enforce-eager` boot to split "PIECEWISE CUDA-graph
-replay interplay" from "kernel bug proper". Result lands here.
+| PIECEWISE CUDA-graph replay | dies identically with `--enforce-eager` |
+
+**Remaining untested variable:** the PLE mmap patch itself (lane A). The
+stack parks at its stream-sync point; swapping to lane C
+(`VLLM_PLE_CPU_OFFLOAD` — at TP4 the vocab-sharded table is only ~13 GB of
+pinned host per node) removes the whole patch from the equation and is the
+next planned experiment. If lane C dies too, this is a GDN/QSA/EP kernel
+bug on sm121 at long context, and it goes upstream with the repro and the
+stack.
 
 **Meanwhile:** the 262k native lane is the shipped default — it passed the
 full gate suite, the bench sweep, and multiple deep prefills. Treat the 1M
