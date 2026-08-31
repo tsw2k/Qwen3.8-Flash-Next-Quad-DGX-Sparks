@@ -11,8 +11,9 @@ exceeds ~100k tokens. That request never completes: a worker rank's GPU
 stream stops advancing, the head's `sample_tokens` RPC times out, and vLLM v1
 declares the engine dead. `/health` returns 200 right up to the fatal
 request. Requests under ~32k never trigger it, in any quantity. The 262k
-native lane shows the same pattern but needed about five deep prefills to
-fire, so the lane boundary changes the rate, not the disease.
+native lane shows the same pattern; across boots the fatal request has been
+the third to fifth deep prefill, on both lanes, so the trigger count is not
+deterministic and the lane boundary changes nothing fundamental.
 
 What it is NOT. Each row below took a dedicated boot, one variable at a time,
 on a freshly rebooted fleet:
@@ -77,11 +78,13 @@ Two engines, one hardware platform, one traffic shape. Our matrix adds one
 fact theirs lacks: the failure survives MTP=0, so speculative decoding is
 not required for it.
 
-Meanwhile the 262k native lane is the shipped default: it passed the full
-gate suite, the bench sweep, and multiple deep prefills. Treat the 1M lane
-as: boots, holds 4.78x of a full 1M request in KV, serves NIAH-128k at all
-depths once per boot. A config that answers one deep prompt is not a config
-that works either.
+Meanwhile the 262k native lane is the shipped default: it passes the full
+gate suite and the bench sweep, and traffic under ~32k has never triggered
+the wedge. Sustained deep-prefill traffic can still hit it there, a few
+requests in, so a production endpoint should run `fleet_watchdog.sh`:
+recovery from a wedge death is an orchestrated relaunch, about 15 minutes.
+The 1M lane boots and holds 4.78x of a full 1M request in KV, but treat it
+as a demo until the wedge closes.
 
 ## Lessons already promoted to defaults (closed here)
 
