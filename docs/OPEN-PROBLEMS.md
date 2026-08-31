@@ -10,10 +10,14 @@ the engine serves flawlessly until roughly the third request whose prompt
 exceeds ~100k tokens. That request never completes: a worker rank's GPU
 stream stops advancing, the head's `sample_tokens` RPC times out, and vLLM v1
 declares the engine dead. `/health` returns 200 right up to the fatal
-request. Requests under ~32k never trigger it, in any quantity. The 262k
-native lane shows the same pattern; across boots the fatal request has been
-the third to fifth deep prefill, on both lanes, so the trigger count is not
-deterministic and the lane boundary changes nothing fundamental.
+request. Binary search later put the wall in (73,728 .. 77,824] tokens:
+nine requests at 73,728 run clean on one boot, one request at 77,824 kills
+the engine, and 76,800 = 48 layers x 1600 (the mamba block) sits inside
+that window. Below the wall the engine is indifferent to volume. Above it,
+death comes within the first few requests, faster the closer the prompt is
+to the wall. While wedged, nvidia-smi shows the stuck worker at ~96% GPU
+utilization: the kernel spins, it does not wait. Details in the issue
+thread.
 
 What it is NOT. Each row below took a dedicated boot, one variable at a time,
 on a freshly rebooted fleet:
