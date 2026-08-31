@@ -57,10 +57,14 @@ tried:
   fp8 table plus a temporary upcast) draws a global OOM kill at any
   `GPU_MEM`. Not viable here without an upstream loader fix.
 - Lane B (`PLE_MODE=resident`, the stock vocab-sharded table, ~12 GiB per
-  rank on GPU) is testable and is the current experiment.
+  rank on GPU) boots at `GPU_MEM=0.78` with a 1,692,092-token pool and dies
+  on the third deep prefill, exactly like every other configuration.
 
-If lane B dies the same way, this is a GDN/QSA/EP kernel bug on sm121 at long
-context, and it goes upstream with the repro and the stack.
+Lane B settled it: the mmap patch is not the trigger. The wedge reproduces
+with three different PLE paths, so the bug sits in the shared forward
+(GDN, QSA or the EP all-to-all) on sm121 at long context. Reported upstream
+with the matrix and the stack:
+https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926
 
 Meanwhile the 262k native lane is the shipped default: it passed the full
 gate suite, the bench sweep, and multiple deep prefills. Treat the 1M lane
