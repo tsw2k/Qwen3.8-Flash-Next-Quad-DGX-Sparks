@@ -66,6 +66,17 @@ with three different PLE paths, so the bug sits in the shared forward
 with the matrix and the stack:
 https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926
 
+Related report, different engine: a withdrawn 2x GB10 SGLang profile for the
+same checkpoint hit "invalid sampling probabilities" with CUDA asserts and
+Xid 43 under multi-turn agentic traffic, with the same trigger shape (long
+prefill, decode, tool turn, longer prefill). The author fixed a
+request-lifecycle branch and still withdrew the profile over a remaining
+state-correctness defect:
+https://forums.developer.nvidia.com/t/381836
+Two engines, one hardware platform, one traffic shape. Our matrix adds one
+fact theirs lacks: the failure survives MTP=0, so speculative decoding is
+not required for it.
+
 Meanwhile the 262k native lane is the shipped default: it passed the full
 gate suite, the bench sweep, and multiple deep prefills. Treat the 1M lane
 as: boots, holds 4.78x of a full 1M request in KV, serves NIAH-128k at all
