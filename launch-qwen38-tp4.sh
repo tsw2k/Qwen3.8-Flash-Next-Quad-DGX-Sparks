@@ -80,9 +80,13 @@ HYBRID_ENV=()
 # vocab-sharded. Needs SYS_PTRACE for the pidfd handover vs yama).
 PLE_ENV=(); PLE_CAPS=()
 case "${PLE_MODE:-mmap}" in
-  mmap)    PLE_ENV=(-e VLLM_PLE_MMAP=1 -e VLLM_PLE_MMAP_WORKERS="${WORKERS:-32}") ;;
-  offload) PLE_ENV=(-e VLLM_PLE_CPU_OFFLOAD=1); PLE_CAPS=(--cap-add SYS_PTRACE) ;;
-  *) echo "PLE_MODE must be mmap or offload" >&2; exit 2 ;;
+  mmap)     PLE_ENV=(-e VLLM_PLE_MMAP=1 -e VLLM_PLE_MMAP_WORKERS="${WORKERS:-32}") ;;
+  offload)  PLE_ENV=(-e VLLM_PLE_CPU_OFFLOAD=1); PLE_CAPS=(--cap-add SYS_PTRACE) ;;
+  resident) PLE_ENV=() ;;  # stock vocab-sharded table on-GPU (~12 GiB/rank at TP4);
+                           # needs the image's ModelOpt gate patch. offload note: its
+                           # worker loads the FULL table with a huge upcast peak —
+                           # global-OOMs a 128 GB node; not viable here.
+  *) echo "PLE_MODE must be mmap, offload or resident" >&2; exit 2 ;;
 esac
 
 docker rm -f "$NAME" 2>/dev/null || true
