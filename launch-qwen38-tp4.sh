@@ -75,6 +75,16 @@ PC_ARG=--no-enable-prefix-caching
 HYBRID_ENV=()
 [ "${HYBRID:-0}" = 1 ] && HYBRID_ENV=(-e VLLM_FP8_HYBRID=1 -e VLLM_USE_DEEP_GEMM=0)
 
+# PLE lane: mmap (default; table on local NVMe, ~0 GPU cost) or offload
+# (native VLLM_PLE_CPU_OFFLOAD; ~13 GiB/rank pinned host at TP4 — the table is
+# vocab-sharded. Needs SYS_PTRACE for the pidfd handover vs yama).
+PLE_ENV=(); PLE_CAPS=()
+case "${PLE_MODE:-mmap}" in
+  mmap)    PLE_ENV=(-e VLLM_PLE_MMAP=1 -e VLLM_PLE_MMAP_WORKERS="${WORKERS:-32}") ;;
+  offload) PLE_ENV=(-e VLLM_PLE_CPU_OFFLOAD=1); PLE_CAPS=(--cap-add SYS_PTRACE) ;;
+  *) echo "PLE_MODE must be mmap or offload" >&2; exit 2 ;;
+esac
+
 docker rm -f "$NAME" 2>/dev/null || true
 
 # --memory 112g protects the node: GB10 wedges (no panic, power-cycle only) when the
@@ -94,7 +104,7 @@ docker run --gpus all -d \
   -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
   -e VLLM_ENGINE_READY_TIMEOUT_S=3600 \
   ${EXPANDABLE_SEGMENTS:+-e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True} \
-  -e VLLM_PLE_MMAP=1 -e VLLM_PLE_MMAP_WORKERS="${WORKERS:-32}" \
+  "${PLE_ENV[@]}" "${PLE_CAPS[@]}" \
   -e VLLM_QSA_EXACT_TOPK="${EXACT_TOPK:-1}" \
   -e VLLM_USE_FLASHINFER_SAMPLER=1 -e VLLM_ALLOW_LONG_MAX_MODEL_LEN="$ALLOW_LONG" \
   -e NCCL_NET=IB -e NCCL_IB_DISABLE=0 \

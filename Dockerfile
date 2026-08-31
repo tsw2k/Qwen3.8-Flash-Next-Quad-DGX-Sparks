@@ -59,6 +59,13 @@ RUN python3 /tmp/patch_mamba_block_size.py ${SP} && rm /tmp/patch_mamba_block_si
 COPY src/patch_qsa_exact_topk.py /tmp/patch_qsa_exact_topk.py
 RUN python3 /tmp/patch_qsa_exact_topk.py ${SP}/vllm/models/qwen3_8_flash_next/nvidia/ops/qsa.py && rm /tmp/patch_qsa_exact_topk.py
 
+# --- 7. PLE lane C: native CPU offload with ModelOpt checkpoints ------------------
+# Upstream's offload gate only accepts Fp8Config; this lets VLLM_PLE_CPU_OFFLOAD=1
+# work with the NVFP4 checkpoint (fp8 PLE shards + weight_scale pass through).
+# Runtime needs --cap-add SYS_PTRACE (pidfd handover vs yama) — launcher handles it.
+COPY src/patch_ple_offload_modelopt.py /tmp/patch_ple_offload_modelopt.py
+RUN python3 /tmp/patch_ple_offload_modelopt.py ${PLE} && rm /tmp/patch_ple_offload_modelopt.py
+
 # --- 6. Hybrid mode: NVFP4 experts + blockwise-fp8 side layers (VLLM_FP8_HYBRID=1) --
 ARG MO=${SP}/vllm/model_executor/layers/quantization/modelopt.py
 ARG QSA=${SP}/vllm/models/qwen3_8_flash_next/nvidia/qsa.py
