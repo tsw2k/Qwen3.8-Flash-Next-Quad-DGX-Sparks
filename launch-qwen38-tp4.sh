@@ -78,7 +78,10 @@ HYBRID_ENV=()
 docker rm -f "$NAME" 2>/dev/null || true
 
 # --memory 112g protects the node: GB10 wedges (no panic, power-cycle only) when the
-# unified pool overcommits. Do NOT add PYTORCH_CUDA_ALLOC_CONF=expandable_segments.
+# unified pool overcommits. EXPANDABLE_SEGMENTS=1 opts into
+# PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True — the GLM TP4 deployments run it
+# on this hardware against allocator fragmentation from repeated deep-prefill
+# transients; the dual-Spark SGLang lore advises against it. Measure, don't assume.
 # shellcheck disable=SC2086
 docker run --gpus all -d \
   --name "$NAME" --restart no \
@@ -90,6 +93,7 @@ docker run --gpus all -d \
   -e VLLM_HOST_IP="$HOST_IP" \
   -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 \
   -e VLLM_ENGINE_READY_TIMEOUT_S=3600 \
+  ${EXPANDABLE_SEGMENTS:+-e PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True} \
   -e VLLM_PLE_MMAP=1 -e VLLM_PLE_MMAP_WORKERS="${WORKERS:-32}" \
   -e VLLM_QSA_EXACT_TOPK="${EXACT_TOPK:-1}" \
   -e VLLM_USE_FLASHINFER_SAMPLER=1 -e VLLM_ALLOW_LONG_MAX_MODEL_LEN="$ALLOW_LONG" \
