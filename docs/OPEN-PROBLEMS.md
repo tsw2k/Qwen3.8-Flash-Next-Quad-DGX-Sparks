@@ -63,9 +63,10 @@ tried:
 
 Lane B settled it: the mmap patch is not the trigger. The wedge reproduces
 with three different PLE paths, so the bug sits in the shared forward
-(GDN, QSA or the EP all-to-all) on sm121 at long context. Reported upstream
-with the matrix and the stack:
-https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926
+(GDN, QSA or the EP all-to-all) on sm121 at long context. Reported upstream: first in PR comments
+(https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926),
+then as a proper issue after the PR merged:
+https://github.com/vllm-project/vllm/issues/54629
 
 Related report, different engine: a withdrawn 2x GB10 SGLang profile for the
 same checkpoint hit "invalid sampling probabilities" with CUDA asserts and

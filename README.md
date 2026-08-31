@@ -189,13 +189,19 @@ real prompts, and no `ignore_eos`.
 
 In order, and nothing skips ahead of the gates.
 
-1. Close the 1M-lane wedge, or land it upstream with the repro and stack.
-2. The hybrid weights lane. Tooling is shipped
+1. Close the 1M-lane wedge. Filed upstream as
+   [vllm#54629](https://github.com/vllm-project/vllm/issues/54629) with the
+   repro, matrix and stack.
+2. Rebase onto merged main: #53896 merged on 2026-08-31, so official images
+   with the renamed `qwen4_exp` layout are coming. Re-path the patch stack
+   (the guarded build steps will flag what upstream absorbed) and retest the
+   wedge on a post-merge build.
+3. The hybrid weights lane. Tooling is shipped
    ([`scripts/prepare-hybrid.sh`](scripts/prepare-hybrid.sh): each node
    converts its local copy, the conversion is deterministic, and the results
    are verified to match across the fleet; serve with `HYBRID=1`). Left to
    measure: whether the +20% decode from one box holds at TP4.
-3. A KV-dtype port for the QSA path (stretch goal). vLLM's QSA layers
+4. A KV-dtype port for the QSA path (stretch goal). vLLM's QSA layers
    currently refuse anything but bf16 KV. SGLang proved fp8 and even NVFP4 KV
    work for this model (MiaAI-Lab measured 0.93M / 1.75M / 2.85M token pools
    at the same memory budget, NIAH-validated to 128k). Porting that to vLLM's
