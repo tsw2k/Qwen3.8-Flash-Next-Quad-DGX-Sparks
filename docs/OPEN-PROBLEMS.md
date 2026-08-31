@@ -5,17 +5,17 @@ upstream resolution.
 
 ## 1M-lane wedge: the Nth deep prefill hangs the GPU stream (OPEN)
 
-**Symptom.** On the 1M YaRN lane (`YARN=1 CTX=1048576 MNBT=1024
-GPU_MEM=0.70`), the engine serves flawlessly — until the ~3rd request whose
-prompt exceeds ~100k tokens. That request never completes: a worker rank's
-GPU stream stops advancing, the head's `sample_tokens` RPC times out, and
-vLLM v1 declares the engine dead. `/health` is 200 right up to the fatal
-request. Requests under ~32k never trigger it, in any quantity. On the 262k
-native lane the same pattern needed ~5 deep prefills to fire, so the lane
-boundary is about rate, not immunity.
+Symptom. On the 1M YaRN lane (`YARN=1 CTX=1048576 MNBT=1024 GPU_MEM=0.70`)
+the engine serves flawlessly until roughly the third request whose prompt
+exceeds ~100k tokens. That request never completes: a worker rank's GPU
+stream stops advancing, the head's `sample_tokens` RPC times out, and vLLM v1
+declares the engine dead. `/health` returns 200 right up to the fatal
+request. Requests under ~32k never trigger it, in any quantity. The 262k
+native lane shows the same pattern but needed about five deep prefills to
+fire, so the lane boundary changes the rate, not the disease.
 
-**What it is NOT** (each eliminated by a dedicated boot, one variable at a
-time, on a freshly rebooted fleet):
+What it is NOT. Each row below took a dedicated boot, one variable at a time,
+on a freshly rebooted fleet:
 
 | Eliminated | Evidence |
 |---|---|
@@ -23,53 +23,59 @@ time, on a freshly rebooted fleet):
 | MTP speculative decoding | dies with `MTP=0` (a boot later, but dies) |
 | CUDA allocator fragmentation | dies with `expandable_segments:True` |
 | Page-cache starvation (the GLM lesson) | dies with an unconditional flusher running through serving |
-| Prefill chunk size | `MNBT` 8192 → 1024 moved the wall deeper but did not remove it |
+| Prefill chunk size | `MNBT` 8192 to 1024 moved the wall deeper but did not remove it |
 | A competing supervisor (see below) | dies with every other workload and systemd unit stopped |
-| Fabric | all NCCL links healthy; no async events in the window |
+| Fabric | all NCCL links healthy, no async events in the window |
+| PIECEWISE CUDA-graph replay | dies identically with `--enforce-eager` |
 
-**The stack.** py-spy captured at hang time, identical on every surviving
+The stack, captured with py-spy at hang time, identical on every surviving
 worker rank:
 
 ```
 Thread (active): "MainThread"
-    forward (vllm_ple_mmap.py:263)        # ids.to("cpu") — stream sync point
+    forward (vllm_ple_mmap.py:263)        # ids.to("cpu"), a stream sync point
     forward_impl (ple_layer.py:438)
     _lookup_impl (vllm_ple_mmap.py:407)
     ...
     forward (qwen3_8_flash_next/nvidia/model.py:464)
 ```
 
-Line 263 is a device-to-host copy — a CUDA stream synchronization. The CPU
-thread is parked at the first sync point after the wedge; **the actual hang
-is a device-side kernel enqueued earlier in the forward** (GDN / QSA /
-EP all-to-all are the candidates), spinning and cascading to all ranks
+Line 263 is a device-to-host copy, which synchronizes with the CUDA stream.
+The CPU thread is parked at the first sync point after the wedge. The actual
+hang is a device-side kernel enqueued earlier in the forward (GDN, QSA and
+the EP all-to-all are the candidates), spinning and cascading to all ranks
 through the collectives. The PLE mmap gather is where the stack points, not
-where the bug lives.
+necessarily where the bug lives.
 
-| PIECEWISE CUDA-graph replay | dies identically with `--enforce-eager` |
+Remaining untested variable: the PLE mmap patch itself (lane A). Swapping the
+PLE path removes that patch from the equation. Both alternatives have been
+tried:
 
-**Remaining untested variable:** the PLE mmap patch itself (lane A). The
-stack parks at its stream-sync point; swapping to lane C
-(`VLLM_PLE_CPU_OFFLOAD` — at TP4 the vocab-sharded table is only ~13 GB of
-pinned host per node) removes the whole patch from the equation and is the
-next planned experiment. If lane C dies too, this is a GDN/QSA/EP kernel
-bug on sm121 at long context, and it goes upstream with the repro and the
-stack.
+- Lane C (`PLE_MODE=offload`, native `VLLM_PLE_CPU_OFFLOAD`) does not survive
+  contact with a 128 GB node: the offload worker is TP-unaware, loads the
+  full table in one process, and its load peak (~85 GB anon RSS observed,
+  fp8 table plus a temporary upcast) draws a global OOM kill at any
+  `GPU_MEM`. Not viable here without an upstream loader fix.
+- Lane B (`PLE_MODE=resident`, the stock vocab-sharded table, ~12 GiB per
+  rank on GPU) is testable and is the current experiment.
 
-**Meanwhile:** the 262k native lane is the shipped default — it passed the
-full gate suite, the bench sweep, and multiple deep prefills. Treat the 1M
-lane as: boots, 4.78x pool of a full 1M request, serves NIAH-128k at all
-depths once per boot — not yet a config that works (a config that answers
-one deep prompt is not a config that works, either).
+If lane B dies the same way, this is a GDN/QSA/EP kernel bug on sm121 at long
+context, and it goes upstream with the repro and the stack.
+
+Meanwhile the 262k native lane is the shipped default: it passed the full
+gate suite, the bench sweep, and multiple deep prefills. Treat the 1M lane
+as: boots, holds 4.78x of a full 1M request in KV, serves NIAH-128k at all
+depths once per boot. A config that answers one deep prompt is not a config
+that works either.
 
 ## Lessons already promoted to defaults (closed here)
 
-- Expert parallelism is mandatory at TP4 (NVFP4 MoE padding) — launcher default.
-- `--ulimit nofile=1048576` (128 PLE mmap shards + 4-node sockets) — launcher default.
-- Never hardcode `NCCL_IB_GID_INDEX` — auto-select, see `.env.example`.
-- `MNBT` ≤ 2048 for long-context work — `.env.example`.
-- **Audit systemd units before a multi-hour ladder.** A fleet supervisor left
+- Expert parallelism is mandatory at TP4 (NVFP4 MoE padding). Launcher default.
+- `--ulimit nofile=1048576` (128 PLE mmap shards plus 4-node sockets). Launcher default.
+- Never hardcode `NCCL_IB_GID_INDEX`. Auto-select; see `.env.example`.
+- `MNBT` of 2048 or less for long-context work. See `.env.example`.
+- Audit systemd units before a multi-hour ladder. A fleet supervisor left
   over from a previous deployment on the same nodes re-armed itself after a
   node reboot and fought this deployment for the master port and memory for
-  several boots. `systemctl list-units | grep -i <anything model-shaped>`
+  several boots. Run `systemctl list-units | grep -i <anything model-shaped>`
   before you trust your failure data.
