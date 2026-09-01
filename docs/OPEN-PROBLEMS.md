@@ -16,7 +16,11 @@ the engine, and 76,800 = 48 layers x 1600 (the mamba block) sits inside
 that window. Below the wall the engine is indifferent to volume. Above it,
 death comes within the first few requests, faster the closer the prompt is
 to the wall. While wedged, nvidia-smi shows the stuck worker at ~96% GPU
-utilization: the kernel spins, it does not wait. Far above the wall the
+utilization: the kernel spins, it does not wait. The wall also reproduces
+on the post-merge nightly (`0.28.1rc1.dev199`, 67 commits after #53896
+merged) at the same boundary, in a minimal configuration with no
+third-party patches on the model path: resident PLE, enforce-eager, prefix
+caching off, no speculative decoding. Far above the wall the
 first request already dies: a single ~950k prompt on the 1M lane fails
 mid-prefill, and survival count is not monotonic in depth (77.8k and 81.9k
 kill on the first request, 98k and 131k allow one to three, 950k kills on
