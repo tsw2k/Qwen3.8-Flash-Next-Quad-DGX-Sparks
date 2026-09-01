@@ -3,7 +3,7 @@ set -euo pipefail
 # Qwen3.8-Flash-Next-NVFP4, TP4 across four DGX Sparks / GB10, via vLLM.
 #
 # Run ON each node, WORKER-FIRST:  ./launch-qwen38-tp4.sh 3   (then 2, 1, head 0 last).
-# A fresh rank that rendezvouses with a dying one hangs — tear down ALL ranks first
+# A fresh rank that rendezvouses with a dying one hangs, tear down ALL ranks first
 # (scripts/teardown.sh), every time, including after a failed boot.
 #
 # Config comes from .env (copy .env.example). Prereqs on every node, checked below:
@@ -13,7 +13,7 @@ set -euo pipefail
 NODE_RANK="${1:?usage: launch-qwen38-tp4.sh <0|1|2|3>}"
 
 cd "$(dirname "$0")"
-test -f .env || { echo "MISSING: .env — cp .env.example .env and edit for your fabric" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env and edit for your fabric" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 NAME="vllm_qwen38"
@@ -30,16 +30,16 @@ esac
 # HYBRID=1 serves the fp8-side-layers copy prepared by scripts/prepare-hybrid.sh.
 if [ "${HYBRID:-0}" = 1 ]; then
   MODEL_HOST_PATH="${MODEL_HOST_PATH%/}-fp8hybrid"
-  test -f "$MODEL_HOST_PATH/.prepared" || { echo "MISSING: $MODEL_HOST_PATH/.prepared — run scripts/prepare-hybrid.sh" >&2; exit 3; }
+  test -f "$MODEL_HOST_PATH/.prepared" || { echo "MISSING: $MODEL_HOST_PATH/.prepared, run scripts/prepare-hybrid.sh" >&2; exit 3; }
 fi
 
 # Fail loudly on missing prereqs rather than letting Docker create empty dirs over them.
-test -f "$MODEL_HOST_PATH/config.json" || { echo "MISSING: $MODEL_HOST_PATH/config.json — run scripts/sync-weights.sh" >&2; exit 3; }
-docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "MISSING: image $IMAGE — run scripts/sync-image.sh" >&2; exit 3; }
-pgrep -f '[f]lusher-unconditional.sh' >/dev/null || echo "WARNING: flusher-unconditional.sh is not running — on GB10 the boot can OOM without it" >&2
+test -f "$MODEL_HOST_PATH/config.json" || { echo "MISSING: $MODEL_HOST_PATH/config.json, run scripts/sync-weights.sh" >&2; exit 3; }
+docker image inspect "$IMAGE" >/dev/null 2>&1 || { echo "MISSING: image $IMAGE, run scripts/sync-image.sh" >&2; exit 3; }
+pgrep -f '[f]lusher-unconditional.sh' >/dev/null || echo "WARNING: flusher-unconditional.sh is not running, on GB10 the boot can OOM without it" >&2
 
 # --enable-expert-parallel is REQUIRED at TP4 with this checkpoint: plain TP shards
-# the MoE intermediate 640 -> 160/rank, which the NVFP4 FLASHINFER_CUTLASS kernels
+# the MoE intermediate 640 to 160/rank, which the NVFP4 FLASHINFER_CUTLASS kernels
 # cannot pad (NotImplementedError at load). EP keeps experts whole, 128/rank.
 # --ulimit nofile=1M: the PLE table is 128 memmapped shards; together with 4-node
 # NCCL/EP sockets that blows through Docker's default fd limit (Errno 24 at load).
@@ -53,7 +53,7 @@ YARN_OVR='{"text_config": {"rope_parameters": {"mrope_interleaved": true, "mrope
 OVR_ARGS=(); ALLOW_LONG=0
 [ "${YARN:-0}" != 0 ] && { OVR_ARGS=(--hf-overrides "$YARN_OVR"); ALLOW_LONG=1; }
 
-# MTP + YaRN: dict hf_overrides don't reach the draft model — force its max_model_len
+# MTP + YaRN: dict hf_overrides don't reach the draft model, force its max_model_len
 # through the speculative config (blazux finding). MTP at TP>=2 is the first thing to
 # verify on this stack (cf. vllm#52480 on a sibling arch); MTP=0 is the fallback lane.
 SPEC=()
@@ -84,7 +84,7 @@ HYBRID_ENV=()
 [ "${HYBRID:-0}" = 1 ] && HYBRID_ENV=(-e VLLM_FP8_HYBRID=1 -e VLLM_USE_DEEP_GEMM=0)
 
 # PLE lane: mmap (default; table on local NVMe, ~0 GPU cost) or offload
-# (native VLLM_PLE_CPU_OFFLOAD; ~13 GiB/rank pinned host at TP4 — the table is
+# (native VLLM_PLE_CPU_OFFLOAD; ~13 GiB/rank pinned host at TP4, the table is
 # vocab-sharded. Needs SYS_PTRACE for the pidfd handover vs yama).
 PLE_ENV=(); PLE_CAPS=()
 case "${PLE_MODE:-mmap}" in
@@ -92,7 +92,7 @@ case "${PLE_MODE:-mmap}" in
   offload)  PLE_ENV=(-e VLLM_PLE_CPU_OFFLOAD=1); PLE_CAPS=(--cap-add SYS_PTRACE) ;;
   resident) PLE_ENV=() ;;  # stock vocab-sharded table on-GPU (~12 GiB/rank at TP4);
                            # needs the image's ModelOpt gate patch. offload note: its
-                           # worker loads the FULL table with a huge upcast peak —
+                           # worker loads the FULL table with a huge upcast peak that
                            # global-OOMs a 128 GB node; not viable here.
   *) echo "PLE_MODE must be mmap, offload or resident" >&2; exit 2 ;;
 esac
@@ -101,7 +101,7 @@ docker rm -f "$NAME" 2>/dev/null || true
 
 # --memory 112g protects the node: GB10 wedges (no panic, power-cycle only) when the
 # unified pool overcommits. EXPANDABLE_SEGMENTS=1 opts into
-# PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True — the GLM TP4 deployments run it
+# PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True, the GLM TP4 deployments run it
 # on this hardware against allocator fragmentation from repeated deep-prefill
 # transients; the dual-Spark SGLang lore advises against it. Measure, don't assume.
 # shellcheck disable=SC2086

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -uo pipefail
-# Fleet preflight — run from the repo checkout on the head node before any launch.
+# Fleet preflight, run from the repo checkout on the head node before any launch.
 # Checks, per node: weights, image ID equality, free memory, swappiness, IB devices,
 # rail connectivity, leftover containers. Exit 0 = safe to run the memory ritual
 # and launch.
 cd "$(dirname "$0")/.."
-test -f .env || { echo "MISSING: .env — cp .env.example .env first" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env first" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 NAME="vllm_qwen38"
@@ -30,18 +30,18 @@ for host in $SSH_HOSTS; do
 
   SWP="$(run "$host" "sysctl -n vm.swappiness" 2>/dev/null || echo '?')"
   if [ "$SWP" = 0 ]; then say swappiness OK
-  else say swappiness "$SWP — set 0 (swappiness>0 can livelock the UVM driver on GB10)"; FAIL=1; fi
+  else say swappiness "$SWP, set 0 (swappiness>0 can livelock the UVM driver on GB10)"; FAIL=1; fi
 
   AVAIL="$(run "$host" "free -g | awk '/^Mem:/{print \$7}'" 2>/dev/null || echo '?')"
   say mem-avail "${AVAIL} GiB"
-  case "$AVAIL" in (\?|[0-9]|[0-9][0-9]) [ "$AVAIL" != "?" ] && [ "$AVAIL" -lt 100 ] && { say mem-avail "under 100 GiB free — reboot or free the node before a boot"; FAIL=1; } ;; esac
+  case "$AVAIL" in (\?|[0-9]|[0-9][0-9]) [ "$AVAIL" != "?" ] && [ "$AVAIL" -lt 100 ] && { say mem-avail "under 100 GiB free, reboot or free the node before a boot"; FAIL=1; } ;; esac
 
   IBDEV="$(run "$host" "ls /dev/infiniband 2>/dev/null | head -c 200" || true)"
   if [ -n "$IBDEV" ]; then say infiniband OK
-  else say infiniband "no /dev/infiniband — RoCE stack down?"; FAIL=1; fi
+  else say infiniband "no /dev/infiniband, RoCE stack down?"; FAIL=1; fi
 
   LEFT="$(run "$host" "docker ps -a --format '{{.Names}}' | grep -x $NAME" 2>/dev/null || true)"
-  if [ -n "$LEFT" ]; then say container "leftover '$NAME' — scripts/teardown.sh first"; FAIL=1
+  if [ -n "$LEFT" ]; then say container "leftover '$NAME', scripts/teardown.sh first"; FAIL=1
   else say container clean; fi
 
   # bracket trick: the pattern must not match the ssh/bash wrapper carrying it
@@ -55,4 +55,4 @@ for ip in "$RANK0_IP" "$RANK1_IP" "$RANK2_IP" "$RANK3_IP"; do
   else say "$ip" UNREACHABLE; FAIL=1; fi
 done
 
-[ "$FAIL" = 0 ] && echo ">> PREFLIGHT OK" || { echo ">> PREFLIGHT FAILED — fix the lines above before launching" >&2; exit 1; }
+[ "$FAIL" = 0 ] && echo ">> PREFLIGHT OK" || { echo ">> PREFLIGHT FAILED, fix the lines above before launching" >&2; exit 1; }

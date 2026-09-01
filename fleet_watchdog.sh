@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# fleet_watchdog.sh — auto-recovery for the TP4 fleet. Runs on the head (rank 0).
+# fleet_watchdog.sh, auto-recovery for the TP4 fleet. Runs on the head (rank 0).
 # Probes /health; on N consecutive failures: tears down ALL ranks, runs the GB10
 # memory ritual, starts the unconditional flusher everywhere, relaunches
-# workers-first (3 -> 2 -> 1), then the head, waits for ready, stops the flushers.
+# workers-first (3 to 2 to 1), then the head, waits for ready, stops the flushers.
 #
 # Pattern from tonyd2wild's GLM fleet_watchdog (see NOTICE), because the failure
 # modes are identical: vLLM v1 cannot recover a dead engine core, and Docker
-# restart policies are unsafe here — headless workers exit 0 on head death
+# restart policies are unsafe here, headless workers exit 0 on head death
 # (on-failure never fires) and a dead head often never exits at all. Full
 # orchestrated relaunch is the only cure.
 #
@@ -14,12 +14,12 @@
 # are STOPPED. The PLE mmap path wants a warm page cache at serve time; an
 # unconditional flusher left running would keep evicting the n-gram table.
 #
-# Recovery is ~15+ min on this stack — tune FAIL_THRESHOLD before pointing this
+# Recovery is ~15+ min on this stack, tune FAIL_THRESHOLD before pointing this
 # at a busy endpoint. Not started automatically; run it once serving is gated:
 #   setsid nohup ./fleet_watchdog.sh > watchdog.out 2>&1 &
 set -u
 cd "$(dirname "$0")"
-test -f .env || { echo "MISSING: .env — cp .env.example .env first" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env first" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 ### ---- config -------------------------------------------------------------
@@ -37,7 +37,7 @@ POST_TEARDOWN_SLEEP=10      # let master-port TIME_WAIT / NVRM settle
 INTER_WORKER_SLEEP=5
 ### -------------------------------------------------------------------------
 
-# rank -> host, from .env's SSH_HOSTS (rank order). Launch order: 3,2,1 then 0.
+# rank to host, from .env's SSH_HOSTS (rank order). Launch order: 3,2,1 then 0.
 read -r -a HOSTS <<< "$SSH_HOSTS"
 [ "${#HOSTS[@]}" = 4 ] || { echo "SSH_HOSTS must list 4 hosts in rank order" >&2; exit 3; }
 SELF="$(hostname -s)"
@@ -101,7 +101,7 @@ recover() {
   until healthy; do
     sleep 30; waited=$((waited + 30))
     if (( waited >= READY_TIMEOUT )); then
-      log "ERROR: fleet not healthy within ${READY_TIMEOUT}s — will retry via main loop"
+      log "ERROR: fleet not healthy within ${READY_TIMEOUT}s, will retry via main loop"
       return 1
     fi
   done

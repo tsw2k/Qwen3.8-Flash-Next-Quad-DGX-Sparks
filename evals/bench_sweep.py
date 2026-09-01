@@ -3,7 +3,7 @@
 aggregate tok/s, per-stream tok/s, and TTFT (time to first streamed token).
 
 Rules this script enforces about honest numbers:
-  - real prompts and real answers (no ignore_eos — it produces meaningless
+  - real prompts and real answers (no ignore_eos, it produces meaningless
     numbers with this model);
   - the prompt set is printed with the results, because speculative-decode
     tok/s is a property of the prompt as much as the config;
@@ -25,10 +25,10 @@ import time
 import urllib.request
 
 PROMPTS = [
-    # structured / code — high draft acceptance
+    # structured / code, high draft acceptance
     "Write a Python function that merges two sorted lists, then explain it briefly.",
     "Write a bash script that checks whether four hosts are reachable over ssh and prints a table.",
-    # freeform prose — low draft acceptance
+    # freeform prose, low draft acceptance
     "Describe an autumn morning in a mountain village, about 250 words.",
     "Explain to a curious teenager why the sky is blue, conversationally.",
     # agentic / mixed
@@ -96,7 +96,7 @@ def main():
     args = ap.parse_args()
 
     levels = [int(x) for x in args.levels.split(",")]
-    print(f"# bench sweep — {args.model} @ {args.base}, max_tokens={args.max_tokens}")
+    print(f"# bench sweep, {args.model} @ {args.base}, max_tokens={args.max_tokens}")
     print("# prompts: mixed structured/prose/agentic (see PROMPTS in this file); "
           "quote them with any number you publish.")
     rows = []

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # Quick serve check against the head. NOT a gate: a config that answers a short
-# prompt is not a config that works — ladder KV only through the gate suite (README).
+# prompt is not a config that works, ladder KV only through the gate suite (README).
 #
 #   scripts/smoke-test.sh [head-host]     # default: localhost
 HOST="${1:-127.0.0.1}"
@@ -40,7 +40,7 @@ r = json.load(urllib.request.urlopen(urllib.request.Request(
     base + "/v1/chat/completions", body, {"Content-Type": "application/json"})))
 dt = time.time() - t0
 toks = r["usage"]["completion_tokens"]
-print(f"   {toks} tokens in {dt:.1f}s = {toks/dt:.1f} tok/s (single stream; the prompt matters — quote it with the number)")
+print(f"   {toks} tokens in {dt:.1f}s = {toks/dt:.1f} tok/s (single stream; the prompt matters, quote it with the number)")
 EOF
 
 echo ">> smoke OK"

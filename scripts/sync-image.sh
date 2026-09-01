@@ -8,7 +8,7 @@ set -euo pipefail
 #
 # Run from the repo checkout on the head node: scripts/sync-image.sh
 cd "$(dirname "$0")/.."
-test -f .env || { echo "MISSING: .env — cp .env.example .env first" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env first" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 SELF="$(hostname -s)"
@@ -27,7 +27,7 @@ for host in $SSH_HOSTS; do
     continue
   fi
   if [ -n "${IMAGE_RSYNC_URL:-}" ]; then
-    # Daemon pull over the compute rails — ssh streams are AES-capped ~1 Gbps on GB10.
+    # Daemon pull over the compute rails, ssh streams are AES-capped ~1 Gbps on GB10.
     # Tar is named by image ID, so a stale tar from a previous build can never ship.
     TAR="${IMAGE_TAR_DIR:-/var/tmp}/qwen38-image-${LOCAL_ID#sha256:}.tar.zst"
     if [ ! -f "$TAR" ]; then
@@ -52,4 +52,4 @@ for host in $SSH_HOSTS; do
   echo "   $host: $ID"
   [ "$ID" = "$LOCAL_ID" ] || FAIL=1
 done
-[ "$FAIL" = 0 ] && echo ">> OK: identical image ID on every node" || { echo ">> MISMATCH — do not launch" >&2; exit 1; }
+[ "$FAIL" = 0 ] && echo ">> OK: identical image ID on every node" || { echo ">> MISMATCH, do not launch" >&2; exit 1; }

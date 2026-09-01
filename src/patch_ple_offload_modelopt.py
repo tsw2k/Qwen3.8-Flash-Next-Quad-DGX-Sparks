@@ -4,8 +4,8 @@
 Upstream's ``_get_ple_embedding_quant_method()`` only recognises ``Fp8Config``,
 so with an NVFP4 (ModelOpt) checkpoint the FP8 PLE shards are rejected and
 loading dies on ``ngram_embedding.weight_scale`` (first reported by @jschmied).
-The PLE shards in these checkpoints are fp8 + weight_scale — exactly what the
-FP8 embedding method expects — so the fix is to return that method for ModelOpt
+The PLE shards in these checkpoints are fp8 + weight_scale, exactly what the
+FP8 embedding method expects, so the fix is to return that method for ModelOpt
 configs too.
 
 Applied at image build:  python3 patch_ple_offload_modelopt.py <path-to-ple_layer.py>
@@ -32,7 +32,7 @@ method_cls = r.group(1)
 
 block = (
     f"{indent}# qwen38-quad: ModelOpt (NVFP4/FP8) checkpoints carry fp8 PLE shards\n"
-    f"{indent}# + weight_scale — exactly what the FP8 method expects. Accept them\n"
+    f"{indent}# + weight_scale, exactly what the FP8 method expects. Accept them\n"
     f"{indent}# so VLLM_PLE_CPU_OFFLOAD works with this checkpoint (@jschmied's fix).\n"
     f"{indent}if quant_config is not None and quant_config.__class__.__name__ in (\n"
     f"{indent}        'ModelOptNvFp4Config', 'ModelOptFp4Config', 'ModelOptFp8Config'):\n"

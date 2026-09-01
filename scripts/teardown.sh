@@ -6,7 +6,7 @@ set -euo pipefail
 #
 # Run from the repo checkout on the head node: scripts/teardown.sh
 cd "$(dirname "$0")/.."
-test -f .env || { echo "MISSING: .env — cp .env.example .env first" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env first" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 NAME="vllm_qwen38"

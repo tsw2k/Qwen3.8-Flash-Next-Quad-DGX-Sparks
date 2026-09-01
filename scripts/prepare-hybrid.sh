@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 # One-time preparation of the "hybrid" checkpoint on EVERY node: NVFP4 experts as
-# published, dense side layers (GDN in/out projections, QSA q/k/v/o, shared experts —
-# ~15 GiB of bf16) rewritten as blockwise fp8-e4m3 (DeepSeek layout, 128x128 blocks).
+# published, dense side layers (GDN in/out projections, QSA q/k/v/o, shared experts,
+# about 15 GiB of bf16) rewritten as blockwise fp8-e4m3 (DeepSeek layout, 128x128 blocks).
 # Those layers are read in full on every decoded token; halving them bought +20%
-# decode on one box (blazux) — whether it holds at TP4 is a roadmap question.
+# decode on one box (blazux), whether it holds at TP4 is a roadmap question.
 #
 # Strategy: the conversion is deterministic math, and every node already holds the
-# full checkpoint on local NVMe — so each node converts ITS OWN copy (~10 min, +13 GB
+# full checkpoint on local NVMe, so each node converts ITS OWN copy (~10 min, +13 GB
 # disk, zero fabric/WAN traffic), and we verify the converted indexes and shard sizes
 # match across the fleet afterwards. Conversion tool: tools/fp8_convert.py by
 # @Saren-Arterius (Apache-2.0, see NOTICE).
@@ -15,7 +15,7 @@ set -euo pipefail
 # Run from the repo checkout on the head node: scripts/prepare-hybrid.sh
 # Then serve with HYBRID=1 in .env.
 cd "$(dirname "$0")/.."
-test -f .env || { echo "MISSING: .env — cp .env.example .env first" >&2; exit 3; }
+test -f .env || { echo "MISSING: .env, cp .env.example .env first" >&2; exit 3; }
 set -a; . ./.env; set +a
 
 SELF="$(hostname -s)"
@@ -26,7 +26,7 @@ REPO_DIR="${REPO_DIR:-$PWD}"
 # cp -al hardlinks the untouched shards (instant, no extra disk for them); the
 # converter renames rewritten shards to .bf16.bak and writes fp8 shards as new
 # files, so the source dir's entries are never modified through the hardlinks.
-# index.json IS rewritten in place -> replace it with a real copy first.
+# index.json IS rewritten in place, so replace it with a real copy first.
 CONVERT_CMD="
 set -euo pipefail
 if [ -f '$DST/.prepared' ]; then echo '>> already prepared'; exit 0; fi
@@ -45,7 +45,7 @@ echo \">> converted: \$n fp8 side-layer tensors\"
 
 for host in $SSH_HOSTS; do
   echo ">> $host: converting (this takes ~10 min per node; nodes run sequentially so"
-  echo "   you can watch the first one — Ctrl-C before the next if it looks wrong)"
+  echo "   you can watch the first one, Ctrl-C before the next if it looks wrong)"
   case "$host" in
     "$SELF") bash -c "$CONVERT_CMD" ;;
     *) ssh "$host" "$CONVERT_CMD" ;;
@@ -62,6 +62,6 @@ for host in $SSH_HOSTS; do
   esac
   echo "   $host: $SUM"
   [ -z "$REF" ] && REF="$SUM"
-  [ "$SUM" = "$REF" ] || { echo ">> MISMATCH on $host — do not serve HYBRID=1" >&2; exit 1; }
+  [ "$SUM" = "$REF" ] || { echo ">> MISMATCH on $host, do not serve HYBRID=1" >&2; exit 1; }
 done
 echo ">> hybrid checkpoint ready on every node. Set HYBRID=1 in .env and relaunch."

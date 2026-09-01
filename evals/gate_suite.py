@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Gate suite for the TP4 boot ladder. A config that boots and answers a short
-prompt is not a config that works — these gates are what "works" means here:
+prompt is not a config that works, these gates are what "works" means here:
 
   G1 deep-decode     long prompt AND a long forced answer (>=150 completion
                      tokens), prompt varied per run so the prefix cache cannot
@@ -63,7 +63,7 @@ def haystack(rng, n_tokens, passkey, depth):
     """Synthetic filler with a passkey sentence planted at `depth` (0..1).
     The filler measures ~1.05 tokens/word on the qwen tokenizer; divide so a
     requested size lands slightly UNDER it (a 250k-word prompt once came out
-    262,145 tokens — one over the model limit — and 400'd the whole rung)."""
+    262,145 tokens, one over the model limit, and 400'd the whole rung)."""
     words = [rng.choice(WORDS) for _ in range(int(n_tokens / 1.06))]
     sentence = f" The secret passkey is {passkey}. Remember it. "
     pos = min(len(words) - 1, int(len(words) * depth))
@@ -72,7 +72,7 @@ def haystack(rng, n_tokens, passkey, depth):
 
 
 def gate(name, ok, detail=""):
-    print(f"  [{'PASS' if ok else 'FAIL'}] {name}" + (f" — {detail}" if detail else ""))
+    print(f"  [{'PASS' if ok else 'FAIL'}] {name}" + (f", {detail}" if detail else ""))
     return ok
 
 
@@ -122,7 +122,7 @@ def g4_niah(base, model, rng, size):
         try:
             msg, _, dt = chat(base, model, [{"role": "user", "content": prompt}], 50)
             results.append((depth, str(key) in msg, f"{dt:.0f}s"))
-        except Exception as e:  # noqa: BLE001 — a gate must report, not crash
+        except Exception as e:  # noqa: BLE001, a gate must report, not crash
             results.append((depth, False, type(e).__name__))
     ok = all(r for _, r, _ in results)
     return gate(f"niah-{size}", ok,

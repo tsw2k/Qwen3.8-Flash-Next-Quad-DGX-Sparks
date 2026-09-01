@@ -9,7 +9,7 @@
 # Run on EVERY node, started BEFORE the launcher, and leave it running for the full
 # boot. Stop it once the engine is serving: pkill -f flusher-unconditional.sh
 #
-# NOTE for THIS model: the PLE mmap path *wants* warm page cache at serve time — the
+# NOTE for THIS model: the PLE mmap path *wants* warm page cache at serve time, the
 # flusher is for the boot window (weight load + KV allocation) only. Stopping it after
 # "Application startup complete" matters more here than on GLM.
 set -u

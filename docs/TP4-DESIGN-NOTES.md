@@ -54,7 +54,7 @@ one; still verify on first boot, but this is no longer the top risk.
   prediction. Ladder and measure; do not paste these numbers anywhere.
 
 Head divisibility for TP4 is clean: 24 attention heads (6/rank), GDN 16 key /
-48 value heads (4/12 per rank), 512 experts. KV heads = 2 < 4 ranks → vLLM
+48 value heads (4/12 per rank), 512 experts. KV heads = 2 is below the 4 ranks, so vLLM
 replicates (legal: 4 % 2 == 0).
 
 ## Patch-stack portability watch
