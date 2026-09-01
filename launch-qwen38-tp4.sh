@@ -69,6 +69,14 @@ fi
 KV_ARGS=()
 [ -n "${KV_GIB:-}" ] && KV_ARGS=(--kv-cache-memory $(( KV_GIB * 1024 * 1024 * 1024 )))
 
+# NIGHTLY=1: the splitting-op names changed with the qwen4_exp rename, so skip
+# the compilation-config flags and run eager (the wall reproduces there too).
+if [ -n "${NIGHTLY:-}" ]; then
+  CC_ARGS=(--enforce-eager)
+else
+  CC_ARGS=(-cc.cudagraph_mode=PIECEWISE -cc.splitting_ops="$SPLIT")
+fi
+
 PC_ARG=--no-enable-prefix-caching
 [ "${PREFIX_CACHE:-1}" = 1 ] && PC_ARG=--enable-prefix-caching
 
@@ -133,8 +141,7 @@ docker run --gpus all -d \
     --max-model-len "$CTX" --max-num-seqs "$SEQS" \
     --gpu-memory-utilization "$GPU_MEM" "${KV_ARGS[@]}" \
     $PC_ARG --enable-chunked-prefill --max-num-batched-tokens "${MNBT:-8192}" \
-    ${NIGHTLY:+--enforce-eager} \
-    ${NIGHTLY:--cc.cudagraph_mode=PIECEWISE} ${NIGHTLY:--cc.splitting_ops="$SPLIT"} \
+    "${CC_ARGS[@]}" \
     --no-enable-flashinfer-autotune \
     --kv-cache-dtype auto \
     "${OVR_ARGS[@]}" \
