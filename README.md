@@ -5,9 +5,9 @@ Serving [RadixArk/Qwen3.8-Flash-Next-NVFP4](https://huggingface.co/RadixArk/Qwen
 across four NVIDIA DGX Spark (GB10 / SM121) class nodes at tensor-parallel 4,
 with vLLM, over a switched dual-rail RoCEv2 fabric.
 
-> 💬 Discussion: [NVIDIA developer forums thread](https://forums.developer.nvidia.com/t/qwen3-8-flash-next-nvfp4-on-4x-dgx-spark-vllm-tp4-serving-4-7m-token-kv-pool-and-the-three-fixes-you-will-need/381897)
+> Discussion: [NVIDIA developer forums thread](https://forums.developer.nvidia.com/t/qwen3-8-flash-next-nvfp4-on-4x-dgx-spark-vllm-tp4-serving-4-7m-token-kv-pool-and-the-three-fixes-you-will-need/381897)
 
-> ✅ Status: TP4 serving and gated at native 262k with `GPU_MEM=0.80`, which
+> Status: TP4 serving and gated at native 262k with `GPU_MEM=0.80`, which
 > is the shipped default (see *Measured*). Known limit: prompts past a wall at
 > roughly 76.8k tokens can wedge the engine within a few requests. We
 > binary-searched the wall and filed it upstream as
