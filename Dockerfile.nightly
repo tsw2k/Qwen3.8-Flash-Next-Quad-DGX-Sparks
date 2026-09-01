@@ -1,0 +1,19 @@
+# Wedge-retest image on the post-merge nightly (qwen4_exp layout).
+#
+# Deliberately minimal: the wall reproduces with the resident PLE table,
+# --enforce-eager and prefix caching off, so this build carries only the
+# ModelOpt PLE gate (regex-based, survives the rename) and the FLA shmem fix.
+# Not a serving image; the day-0 Dockerfile stays the production build.
+#
+#   docker build -f Dockerfile.nightly -t qwen38-nightly:local .
+FROM vllm/vllm-openai:nightly-aarch64
+
+ARG SP=/usr/local/lib/python3.12/dist-packages
+ARG PLE=${SP}/vllm/models/qwen4_exp/nvidia/ple_layer.py
+
+COPY src/patch_ple_offload_modelopt.py /tmp/p.py
+RUN python3 /tmp/p.py ${PLE} && rm /tmp/p.py
+
+ARG FLA_UTILS=${SP}/vllm/third_party/flash_linear_attention/ops/utils.py
+RUN sed -i 's|DEFAULT = 102400|DEFAULT = 101376  # spark-fla-shmem: GB10 99KiB|' ${FLA_UTILS} \
+ && grep -q "spark-fla-shmem" ${FLA_UTILS} && echo "fla shmem gate patched"
