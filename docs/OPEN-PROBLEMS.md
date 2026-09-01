@@ -79,6 +79,15 @@ with three different PLE paths, so the bug sits in the shared forward
 then as a proper issue after the PR merged:
 https://github.com/vllm-project/vllm/issues/54629
 
+The wall moves with `--mamba-block-size`, which is the best handle found so
+far. At the default block of 1600 it sits in (73,728 .. 77,824]; at block
+1024 the same fleet serves 77,824 cleanly and only dies somewhere in
+(77,824 .. 131,072]. A smaller block pushes the wall out rather than in, so
+the earlier reading of 76,800 = 48 x 1600 as "exactly 48 blocks" is wrong;
+the capacity that runs out scales inversely with block size. `MNBT` and
+every other knob leave the wall where it is. Partial workaround for
+long-context work: `EXTRA="--mamba-block-size 1024"`.
+
 Related report, different engine: a withdrawn 2x GB10 SGLang profile for the
 same checkpoint hit "invalid sampling probabilities" with CUDA asserts and
 Xid 43 under multi-turn agentic traffic, with the same trigger shape (long
