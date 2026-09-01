@@ -13,9 +13,9 @@ declares the engine dead. `/health` returns 200 right up to the fatal
 request. Binary search later put the wall in (73,728 .. 77,824] tokens:
 nine requests at 73,728 run clean on one boot, one request at 77,824 kills
 the engine, and 76,800 = 48 layers x 1600 (the mamba block) sits inside
-that window. Below the wall the engine is indifferent to volume. Above it,
-death comes within the first few requests, faster the closer the prompt is
-to the wall. While wedged, nvidia-smi shows the stuck worker at ~96% GPU
+that window. Below the wall the engine does not care how many requests you send. Above
+it, the engine dies within the first few requests, and the closer the
+prompt is to the wall the longer it survives. While wedged, nvidia-smi shows the stuck worker at ~96% GPU
 utilization: the kernel spins, it does not wait. The wall also reproduces
 on the post-merge nightly (`0.28.1rc1.dev199`, 67 commits after #53896
 merged) at the same boundary, in a minimal configuration with no
@@ -74,10 +74,10 @@ tried:
 
 Lane B settled it: the mmap patch is not the trigger. The wedge reproduces
 with three different PLE paths, so the bug sits in the shared forward
-(GDN, QSA or the EP all-to-all) on sm121 at long context. Reported upstream: first in PR comments
-(https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926),
-then as a proper issue after the PR merged:
-https://github.com/vllm-project/vllm/issues/54629
+(GDN, QSA or the EP all-to-all) on sm121 at long context. Reported upstream, first in
+[PR comments](https://github.com/vllm-project/vllm/pull/53896#issuecomment-5477335926)
+and then as [issue #54629](https://github.com/vllm-project/vllm/issues/54629)
+once the PR had merged.
 
 The wall moves with `--mamba-block-size`, which is the best handle found so
 far. At the default block of 1600 it sits in (73,728 .. 77,824]; at block
@@ -94,10 +94,10 @@ Xid 43 under multi-turn agentic traffic, with the same trigger shape (long
 prefill, decode, tool turn, longer prefill). The author fixed a
 request-lifecycle branch and still withdrew the profile over a remaining
 state-correctness defect:
-https://forums.developer.nvidia.com/t/381836
-Two engines, one hardware platform, one traffic shape. Our matrix adds one
-fact theirs lacks: the failure survives MTP=0, so speculative decoding is
-not required for it.
+[forum thread 381836](https://forums.developer.nvidia.com/t/381836).
+Both engines fail on the same hardware under the same traffic shape, and
+our matrix adds one fact theirs lacks: the failure survives MTP=0, so
+speculative decoding is not required for it.
 
 Meanwhile the 262k native lane is the shipped default: it passes the full
 gate suite and the bench sweep, and traffic under ~32k has never triggered
