@@ -96,6 +96,28 @@ throughput under concurrency is the second target. Single-stream decode over
 a switched fabric was never the game: 6B active params means the per-layer
 all-reduce is a real tax, and we measure and publish the delta as it is.
 
+## Neighbouring measurements
+
+Someone benchmarked Qwen3.8-27B NVFP4 on a single Spark and compared serving
+stacks head to head:
+[forum thread 380957](https://forums.developer.nvidia.com/t/qwen3-8-27b-benchmarking-on-one-dgx-spark-dflash2-beat-vllm-mtp-and-greedy-beat-the-thinking-sampler/380957).
+Different model and one box rather than four, but two results carry over.
+
+Greedy beat the thinking sampler for agent work: same quality score, roughly
+half the median turn time, and the thinking run was the one that fell for a
+fake-system-message injection. We serve with thinking off by default for
+unrelated reasons, and this is a second argument for it.
+
+SGLang with the DFlash2 drafter decoded about 2.5x faster than vLLM with MTP on
+that model. Before anyone asks why we do not do the same: there is no DFlash2
+drafter published for Flash-Next, and DFlash2 does not work with YaRN, which is
+what the 1M lane depends on.
+
+Their memory caveat also matches ours from a different direction. They cap the
+memory fraction at 0.50 to avoid locking up the host; we found 0.85 wedges the
+head node badly enough to need the power button. Different numbers, same GB10
+failure mode.
+
 ## What's in the image
 
 The `Dockerfile` is the official day-0 image `vllm/vllm-openai:qwen38-flash-next`
@@ -207,7 +229,12 @@ In order, and nothing skips ahead of the gates.
    already reads a quarter of them. Tooling stays in the repo
    ([`scripts/prepare-hybrid.sh`](scripts/prepare-hybrid.sh), `HYBRID=1`)
    for anyone who wants to reproduce the measurement.
-4. A KV-dtype port for the QSA path (stretch goal). vLLM's QSA layers
+4. Quality evaluation. Everything in this repo measures speed, memory and
+   retrieval, and nothing measures whether answers got worse. The 27B thread
+   above used `tool-eval-bench` over 69 scenarios; running it against this
+   endpoint would let us say what the patch stack and the hybrid conversion
+   actually cost, instead of only what they cost in tokens per second.
+5. A KV-dtype port for the QSA path (stretch goal). vLLM's QSA layers
    currently refuse anything but bf16 KV. SGLang proved fp8 and even NVFP4 KV
    work for this model (MiaAI-Lab measured 0.93M / 1.75M / 2.85M token pools
    at the same memory budget, NIAH-validated to 128k). Porting that to vLLM's
