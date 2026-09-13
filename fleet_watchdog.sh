@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # fleet_watchdog.sh, auto-recovery for the TP4 fleet. Runs on the head (rank 0).
-# Probes /health; on N consecutive failures: tears down ALL ranks, runs the GB10
+# Probes every rank's container, /health, and a one-token canary request; on N
+# consecutive failures: tears down ALL ranks, runs the GB10
 # memory ritual, starts the unconditional flusher everywhere, relaunches
 # workers-first (3 to 2 to 1), then the head, waits for ready, stops the flushers.
 #
@@ -13,6 +14,11 @@
 # One deliberate difference from the GLM original: after recovery the flushers
 # are STOPPED. The PLE mmap path wants a warm page cache at serve time; an
 # unconditional flusher left running would keep evicting the n-gram table.
+#
+# Why more than /health: on DeepSeek-V4.1-Flash, same vLLM multi-node mp executor, a
+# killed worker left the head at /health 200 with nothing logged, and requests hung
+# until an NCCL timeout ~6 min later (tsw2k/Deepseek-4.1-Flash-Quad-DGX-Sparks,
+# failover test 2026-09-13). Not reproduced on this stack; the mechanism is the same.
 #
 # Recovery is ~15+ min on this stack, tune FAIL_THRESHOLD before pointing this
 # at a busy endpoint. Not started automatically; run it once serving is gated:
@@ -28,10 +34,14 @@ HEALTH_URL="http://127.0.0.1:${PORT}/health"  # NOT /v1/models: that returns 200
 CHECK_INTERVAL=60
 FAIL_THRESHOLD=3
 CURL_TIMEOUT=15
+CANARY_TIMEOUT=90           # chunked prefill interleaves the canary with long prompts
+MAX_RECOVERIES=3            # failed relaunches in a row before giving up
 READY_TIMEOUT=3600          # matches VLLM_ENGINE_READY_TIMEOUT_S in the launcher
 CONTAINER="vllm_qwen38"
 REPO_DIR="${REPO_DIR:-$PWD}"  # same checkout path expected on every node
 LOCKFILE="$HOME/.qwen38_watchdog.lock"
+PAUSE_FLAG="$HOME/.qwen38_watchdog.pause"    # touch to pause for maintenance; rm to resume
+GIVEUP_FLAG="$HOME/.qwen38_watchdog.gaveup"  # written after MAX_RECOVERIES; rm to re-arm
 LOGFILE="$PWD/fleet_watchdog.log"
 POST_TEARDOWN_SLEEP=10      # let master-port TIME_WAIT / NVRM settle
 INTER_WORKER_SLEEP=5
@@ -56,6 +66,25 @@ run_on() {  # run_on <rank> <command string>
 }
 
 healthy() { curl -sf -m "$CURL_TIMEOUT" -o /dev/null "$HEALTH_URL"; }
+
+# probe: prints the reason and returns 1 on the first failed check.
+probe() {
+  local r host state
+  for r in "${RANK_ORDER[@]}"; do
+    host="${HOSTS[$r]}"
+    if [ "$host" = "$SELF" ]; then
+      state=$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo missing)
+    else
+      state=$(ssh -o ConnectTimeout=15 -o BatchMode=yes "$host" "docker inspect -f '{{.State.Status}}' $CONTAINER 2>/dev/null || echo missing" 2>/dev/null || echo unreachable)
+    fi
+    [ "$state" = running ] || { echo "rank $r container: $state"; return 1; }
+  done
+  healthy || { echo "health"; return 1; }
+  curl -sf -m "$CANARY_TIMEOUT" -o /dev/null "http://127.0.0.1:${PORT}/v1/completions" -H 'Content-Type: application/json' \
+    -d "{\"model\":\"${SERVED_NAME}\",\"prompt\":\"1\",\"max_tokens\":1,\"temperature\":0}" \
+    || { echo "canary"; return 1; }
+  return 0
+}
 
 start_flusher() {
   run_on "$1" "pkill -f '[f]lusher-unconditional.sh' 2>/dev/null; cd '$REPO_DIR' && setsid nohup ./flusher-unconditional.sh >/tmp/flusher-unconditional.log 2>&1 < /dev/null & sleep 1; pgrep -f '[f]lusher-unconditional.sh' >/dev/null && echo flusher:RUNNING || echo flusher:FAILED"
@@ -119,15 +148,30 @@ fi
 log "watchdog started (pid $$, interval ${CHECK_INTERVAL}s, threshold $FAIL_THRESHOLD)"
 
 fails=0
+failed_recoveries=0
 while true; do
-  if healthy; then
-    (( fails > 0 )) && log "health OK again after $fails failure(s)"
+  if [ -f "$GIVEUP_FLAG" ] || [ -f "$PAUSE_FLAG" ]; then
+    fails=0; sleep "$CHECK_INTERVAL"; continue
+  fi
+  if why=$(probe); then
+    (( fails > 0 )) && log "probe OK again after $fails failure(s)"
     fails=0
+    failed_recoveries=0
   else
     fails=$((fails + 1))
-    log "health FAIL ($fails/$FAIL_THRESHOLD): $HEALTH_URL"
+    log "probe FAIL ($fails/$FAIL_THRESHOLD): $why"
     if (( fails >= FAIL_THRESHOLD )); then
-      recover || log "recovery attempt failed; probing continues"
+      if recover; then
+        failed_recoveries=0
+      else
+        failed_recoveries=$((failed_recoveries + 1))
+        log "recovery attempt failed ($failed_recoveries/$MAX_RECOVERIES)"
+        # A boot that keeps failing needs a person; relaunching every few minutes hides the cause.
+        if (( failed_recoveries >= MAX_RECOVERIES )); then
+          echo "gave up $(date '+%F %T') after $failed_recoveries failed recoveries" > "$GIVEUP_FLAG"
+          log "=== GIVING UP; rm $GIVEUP_FLAG to re-arm ==="
+        fi
+      fi
       fails=0
     fi
   fi

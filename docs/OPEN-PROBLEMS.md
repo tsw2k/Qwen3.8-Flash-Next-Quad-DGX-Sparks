@@ -104,6 +104,9 @@ gate suite and the bench sweep, and traffic under ~32k has never triggered
 the wedge. Sustained deep-prefill traffic can still hit it there, a few
 requests in, so a production endpoint should run `fleet_watchdog.sh`:
 recovery from a wedge death is an orchestrated relaunch, about 15 minutes.
+The watchdog probes each rank's container and sends a one-token canary, not
+just `/health`: an engine stuck in a collective can keep `/health` at 200
+(measured on DeepSeek-V4.1-Flash with a killed worker, same vLLM executor).
 The 1M lane boots and holds 4.78x of a full 1M request in KV, but treat it
 as a demo until the wedge closes.
 
